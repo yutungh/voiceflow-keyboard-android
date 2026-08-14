@@ -38,11 +38,6 @@ import android.view.inputmethod.ExtractedText;
 import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
-import android.view.textservice.SentenceSuggestionsInfo;
-import android.view.textservice.SpellCheckerSession;
-import android.view.textservice.SuggestionsInfo;
-import android.view.textservice.TextInfo;
-import android.view.textservice.TextServicesManager;
 import android.widget.LinearLayout;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -69,12 +64,19 @@ import java.util.regex.Pattern;
 
 public class VoiceFlowKeyboardService extends InputMethodService {
     private static final int KEY_VISUAL_GAP_DP = 3;
-    private static final int SPELL_CHECK_DELAY_MS = 120;
+    private static final int CORRECTION_DELAY_MS = 120;
     private static final int SHIFT_DOUBLE_TAP_MS = 350;
     private static final int SPACE_CURSOR_HOLD_MS = 280;
     private static final int SPACE_CURSOR_STEP_DP = 10;
     private static final Map<String, String> COMMON_TYPOS = commonTypos();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    /**
+     * Separate from {@link #executor} on purpose. That one is a single thread
+     * shared with cloud transcription, retone, transform and model downloads;
+     * a queued download runs for minutes and would head-of-line block every
+     * keystroke's correction behind it.
+     */
+    private final ExecutorService typingExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final List<TextView> keyButtons = new ArrayList<>();
     private final List<TextView> letterButtons = new ArrayList<>();
@@ -145,7 +147,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private volatile boolean offlineRecordLoop;
     private File currentAudioFile;
     private File currentPcmFile;
-    private SpellCheckerSession spellCheckerSession;
+    private EnglishEngine englishEngine;
     private Runnable deleteRepeatRunnable;
     private Runnable spaceCursorRunnable;
     private Runnable statusSpinnerRunnable;
@@ -154,7 +156,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private ObjectAnimator micLoadingAnimator;
     private ObjectAnimator instructionLoadingAnimator;
     private SeekBar expressionSlider;
-    private Runnable spellCheckRunnable;
+    private Runnable correctionRunnable;
     private String statusSpinnerBase = "";
     private String translationTargetLanguage = "";
     private String instructionSourceText = "";
@@ -168,9 +170,8 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private String lastAutoCorrectReplacement = "";
     private String lastAutoCorrectSeparator = "";
     private boolean pendingAutoCorrectAccept;
-    private int spellCheckGeneration;
+    private int correctionGeneration;
     private int statusSpinnerStep;
-    private static final String[] COMMON_COMPLETIONS = commonCompletions();
 
     @Override
     public View onCreateInputView() {
@@ -216,8 +217,8 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     @Override
     public void onDestroy() {
         stopRecorderSilently();
-        destroySpellChecker();
         executor.shutdownNow();
+        typingExecutor.shutdownNow();
         super.onDestroy();
     }
 
@@ -241,6 +242,13 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     @Override
     public void onStartInputView(EditorInfo info, boolean restarting) {
         super.onStartInputView(info, restarting);
+        // Now that the field is known, start the 1.3 MB lexicon parse if this
+        // one can use it. Waiting for the first keystroke would put the parse
+        // in the worst possible place; onCreate is too early, because there is
+        // no field yet and a password box never needs it at all.
+        if (shouldTypingAssistance()) {
+            englishEngine().prepare();
+        }
         restoreKeyboardForActiveInput();
     }
 
@@ -623,7 +631,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         if (symbolsMode) {
             if (symbolsMoreMode) {
                 panel.addView(keyRow(new String[]{"[", "]", "{", "}", "#", "%", "^", "*", "+", "="}));
-                panel.addView(keyRow(new String[]{"_", "\\", "|", "~", "<", ">", "€", "£", "¥", "•"}));
+                panel.addView(keyRow(new String[]{"_", "\\", "|", "~", "<", ">", "â‚¬", "Â£", "Â¥", "â€¢"}));
             } else {
                 panel.addView(keyRow(new String[]{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}));
                 panel.addView(keyRow(new String[]{"-", "/", ":", ";", "(", ")", "$", "&", "@", "\""}));
@@ -632,7 +640,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             third.setOrientation(LinearLayout.HORIZONTAL);
             third.addView(keyButton(symbolsMoreMode ? "123" : "#+=", 1.2f, v -> toggleMoreSymbolsMode(), true));
             String[] thirdRow = symbolsMoreMode
-                    ? new String[]{"`", "…", "—", "–", "¿", "¡", "°"}
+                    ? new String[]{"`", "â€¦", "â€”", "â€“", "Â¿", "Â¡", "Â°"}
                     : new String[]{".", ",", "?", "!", "'", "_", "+"};
             int symbolSplit = splitIndexFor(KeyboardGeometry.Row.SYMBOLS_THIRD, thirdRow.length);
             for (int i = 0; i < thirdRow.length; i++) {
@@ -1079,7 +1087,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             bottom.addView(spaceKey(spaceWeight));
         }
         if (!symbolsMode) {
-            String stop = inputMode.isChinese() ? "。" : ".";
+            String stop = inputMode.isChinese() ? "ã€‚" : ".";
             bottom.addView(keyButton(stop, 0.9f, v -> commitSeparator(stop)));
         }
         bottom.addView(keyButton("return", 1.65f, v -> sendEnter(), true));
@@ -1433,8 +1441,8 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         boolean selectedAndCollapsed = selectedFunStyle != null && !funStylesExpanded;
         String title = selectedAndCollapsed
                 ? selectedFunStyle.displayName()
-                : "🎭 Fun (" + funStyles.size() + ")";
-        TextView button = historyText(title + (funStylesExpanded ? "  ◂" : "  ▸"), 12, true);
+                : "ðŸŽ­ Fun (" + funStyles.size() + ")";
+        TextView button = historyText(title + (funStylesExpanded ? "  â—‚" : "  â–¸"), 12, true);
         button.setGravity(Gravity.CENTER);
         button.setSingleLine(true);
         button.setEllipsize(TextUtils.TruncateAt.END);
@@ -1637,7 +1645,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     }
 
     private String presetDropdownText() {
-        return labelForPreset(selectedPreset) + " ▾";
+        return labelForPreset(selectedPreset) + " â–¾";
     }
 
     private TextView toolButton(String text) {
@@ -2013,6 +2021,11 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             showIdleChips();
             return;
         }
+        if (applyTypingRule(separator)) {
+            clearAutoCorrection();
+            updateAutoCapitalization();
+            return;
+        }
         boolean corrected = applyPendingAutoCorrection(true);
         applyRecentPhraseReplacement();
         commitText(separator);
@@ -2021,6 +2034,41 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         }
         clearAutoCorrection();
         updateAutoCapitalization();
+    }
+
+    /**
+     * Applies double-space-to-full-stop, or drops a space before closing
+     * punctuation. Returns true when it handled the key.
+     *
+     * <p>Neither rule can collide with an autocorrection being applied on the
+     * same keystroke: both require a trailing space, and a trailing space means
+     * there is no word in front of the cursor to have corrected. A correction
+     * from an <em>earlier</em> keystroke is a different matter — its undo record
+     * describes a tail like {@code "the "} that this rewrite is about to turn
+     * into {@code "the. "}. Left alone, {@link #undoLastAutoCorrectionIfPossible}
+     * would keep hunting for the old tail and backspace-revert would quietly
+     * stop working. Clear it rather than rewrite it: by now the correction is
+     * two keystrokes back, and reverting it instead of the punctuation the user
+     * just typed would be the more surprising outcome.
+     */
+    private boolean applyTypingRule(String separator) {
+        if (!shouldTypingAssistance()) {
+            return false;
+        }
+        InputConnection connection = getCurrentInputConnection();
+        if (connection == null) {
+            return false;
+        }
+        CharSequence before = connection.getTextBeforeCursor(2, 0);
+        TypingRules.Outcome outcome = TypingRules.forSeparator(separator, before);
+        if (!outcome.applies()) {
+            return false;
+        }
+        clearLastVoiceInsertion();
+        clearLastAutoCorrection();
+        connection.deleteSurroundingText(outcome.deleteBefore, 0);
+        connection.commitText(outcome.insert, 1);
+        return true;
     }
 
     private void commitText(String text) {
@@ -2562,11 +2610,11 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             clearAutoCorrection();
             return;
         }
-        if (spellCheckRunnable == null) {
-            spellCheckRunnable = this::requestAutoCorrectionForCurrentWord;
+        if (correctionRunnable == null) {
+            correctionRunnable = this::requestAutoCorrectionForCurrentWord;
         }
-        mainHandler.removeCallbacks(spellCheckRunnable);
-        mainHandler.postDelayed(spellCheckRunnable, SPELL_CHECK_DELAY_MS);
+        mainHandler.removeCallbacks(correctionRunnable);
+        mainHandler.postDelayed(correctionRunnable, CORRECTION_DELAY_MS);
     }
 
     private void requestAutoCorrectionForCurrentWord() {
@@ -2584,6 +2632,10 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             return;
         }
 
+        // The explicit table still outranks the lexicon. It is the only thing
+        // that can fix a first-letter transposition ("hte") or expand a
+        // contraction the lexicon has no typo for ("dont"), because correction
+        // proper never changes the first letter.
         String fallback = fallbackCorrectionFor(word);
         if (!fallback.isEmpty()) {
             List<String> suggestions = new ArrayList<>();
@@ -2592,84 +2644,60 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             return;
         }
 
-        ensureSpellChecker();
-        if (spellCheckerSession == null) {
-            setPendingAutoComplete(word);
+        EnglishEngine engine = englishEngine();
+        engine.prepare();
+        if (!engine.isReady()) {
+            // Still parsing, or the asset is unreadable. Say nothing rather
+            // than guessing from a half-built lexicon.
+            clearAutoCorrection();
             return;
         }
-        int generation = ++spellCheckGeneration;
-        spellCheckerSession.getSuggestions(new TextInfo[]{new TextInfo(word, 0, generation)}, 3, false);
+        engine.suggest(word, 3, ++correctionGeneration);
     }
 
-    private void ensureSpellChecker() {
-        if (spellCheckerSession != null) {
-            return;
+    private EnglishEngine englishEngine() {
+        if (englishEngine == null) {
+            englishEngine = new EnglishEngine(
+                    getAssets(), typingExecutor, mainHandler, this::applyEnglishSuggestions);
         }
-        TextServicesManager manager = (TextServicesManager) getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE);
-        if (manager == null
-                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !manager.isSpellCheckerEnabled())) {
-            return;
-        }
-        spellCheckerSession = manager.newSpellCheckerSession(
-                null,
-                Locale.getDefault(),
-                new SpellCheckerSession.SpellCheckerSessionListener() {
-                    @Override
-                    public void onGetSuggestions(SuggestionsInfo[] results) {
-                        handleSpellSuggestions(results);
-                    }
-
-                    @Override
-                    public void onGetSentenceSuggestions(SentenceSuggestionsInfo[] results) {
-                    }
-                },
-                true
-        );
+        return englishEngine;
     }
 
-    private void handleSpellSuggestions(SuggestionsInfo[] results) {
-        if (results == null || results.length == 0) {
-            return;
-        }
-        SuggestionsInfo info = results[0];
-        int generation = info.getSequence();
-        mainHandler.post(() -> applySpellSuggestions(generation, info));
-    }
-
-    private void applySpellSuggestions(int generation, SuggestionsInfo info) {
-        if (generation != spellCheckGeneration || !shouldAutoCorrectTyping()) {
+    /**
+     * Publishes a finished background pass, if it is still wanted.
+     *
+     * <p>Everything the request was predicated on is rechecked here, because
+     * arbitrarily much can happen between dispatch and delivery: the user keeps
+     * typing, switches field, switches to Chinese, or starts recording. The
+     * generation check alone is not enough â€” {@link #clearAutoCorrection()} also
+     * bumps it, so a stale result is dropped even when no newer request exists.
+     */
+    private void applyEnglishSuggestions(EnglishEngine.Suggestions suggestions) {
+        if (suggestions.generation != correctionGeneration || !shouldAutoCorrectTyping()) {
             return;
         }
         String word = currentWordBeforeCursor();
-        if (word.length() < 2) {
-            clearAutoCorrection();
+        if (!suggestions.word.equals(word)) {
+            // The word moved on under us; a newer request is already in flight.
             return;
         }
         if (Prefs.isLearnedWord(this, word)) {
             clearAutoCorrection();
             return;
         }
-
-        int attrs = info.getSuggestionsAttributes();
-        if ((attrs & SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY) != 0) {
-            setPendingAutoComplete(word);
+        if (suggestions.correction.isEmpty()) {
+            setPendingAutoComplete(word, suggestions.completions);
             return;
         }
-
-        List<String> suggestions = new ArrayList<>();
-        for (int i = 0; i < info.getSuggestionsCount(); i++) {
-            String candidate = info.getSuggestionAt(i);
-            if (candidate != null && !candidate.equalsIgnoreCase(word) && sameLeadingLetter(word, candidate)) {
-                addSuggestion(suggestions, matchCase(word, candidate));
-            }
+        List<String> cased = new ArrayList<>();
+        for (String candidate : suggestions.correction.words) {
+            addSuggestion(cased, matchCase(word, candidate));
         }
-        if (suggestions.isEmpty()) {
-            setPendingAutoComplete(word);
+        if (cased.isEmpty()) {
+            setPendingAutoComplete(word, suggestions.completions);
             return;
         }
-
-        boolean recommended = (attrs & SuggestionsInfo.RESULT_ATTR_HAS_RECOMMENDED_SUGGESTIONS) != 0;
-        setPendingAutoCorrection(word, suggestions, recommended);
+        setPendingAutoCorrection(word, cased, suggestions.correction.autoAccept);
     }
 
     private boolean applyPendingAutoCorrection(boolean autoOnly) {
@@ -2735,7 +2763,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         showIdleChips();
     }
 
-    private void setPendingAutoComplete(String prefix) {
+    private void setPendingAutoComplete(String prefix, List<String> completions) {
         pendingAutoCorrectWord = "";
         pendingAutoCorrectReplacement = "";
         pendingAutoCorrectSuggestions.clear();
@@ -2746,13 +2774,14 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             hideChipStrip();
             return;
         }
-        for (String word : COMMON_COMPLETIONS) {
-            if (word.regionMatches(true, 0, pendingAutoCompletePrefix, 0, pendingAutoCompletePrefix.length())
-                    && !word.equalsIgnoreCase(pendingAutoCompletePrefix)) {
-                addCompletion(pendingAutoCompleteSuggestions, matchCase(pendingAutoCompletePrefix, word));
-            }
-            if (pendingAutoCompleteSuggestions.size() >= 3) {
-                break;
+        if (completions != null) {
+            for (String completion : completions) {
+                addCompletion(
+                        pendingAutoCompleteSuggestions,
+                        matchCase(pendingAutoCompletePrefix, completion));
+                if (pendingAutoCompleteSuggestions.size() >= 3) {
+                    break;
+                }
             }
         }
         showIdleChips();
@@ -2785,8 +2814,13 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         pendingAutoCompletePrefix = "";
         pendingAutoCompleteSuggestions.clear();
         pendingAutoCorrectAccept = false;
-        if (spellCheckRunnable != null) {
-            mainHandler.removeCallbacks(spellCheckRunnable);
+        // Invalidate anything already running on the typing executor. Removing
+        // the debounce callback only stops work that has not started; a pass
+        // already in flight would otherwise come back and repopulate the chips
+        // we are clearing here.
+        correctionGeneration++;
+        if (correctionRunnable != null) {
+            mainHandler.removeCallbacks(correctionRunnable);
         }
         if (chipStrip != null && !recording && !processing) {
             hideChipStrip();
@@ -3028,13 +3062,6 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         return replacement == null ? "" : matchCase(word, replacement);
     }
 
-    private boolean sameLeadingLetter(String word, String candidate) {
-        if (word.isEmpty() || candidate == null || candidate.isEmpty()) {
-            return false;
-        }
-        return Character.toLowerCase(word.charAt(0)) == Character.toLowerCase(candidate.charAt(0));
-    }
-
     private String matchCase(String original, String replacement) {
         if (original.equals(original.toUpperCase(Locale.US))) {
             return replacement.toUpperCase(Locale.US);
@@ -3115,7 +3142,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
      * again after a configuration change: InputMethodService.onConfigurationChanged
      * runs resetStateForNewConfiguration -> initViews, and initViews nulls the
      * cached input view. That is also why the IME service must NOT declare
-     * android:configChanges — doing so marks those diffs handled and suppresses
+     * android:configChanges â€” doing so marks those diffs handled and suppresses
      * the rebuild.
      */
     private static final class KeyboardMetrics {
@@ -3164,17 +3191,17 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private static String fullWidthPunctuation(String ascii) {
         switch (ascii) {
             case ".":
-                return "。";
+                return "ã€‚";
             case ",":
-                return "，";
+                return "ï¼Œ";
             case "?":
-                return "？";
+                return "ï¼Ÿ";
             case "!":
-                return "！";
+                return "ï¼";
             case ":":
-                return "：";
+                return "ï¼š";
             case ";":
-                return "；";
+                return "ï¼›";
             default:
                 return ascii;
         }
@@ -3211,7 +3238,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         } else {
             pinyinSession.setComposer(composer);
         }
-        setStatus(inputMode.isKeypad() ? "中文 九键" : "中文 全键");
+        setStatus(inputMode.isKeypad() ? "ä¸­æ–‡ ä¹é”®" : "ä¸­æ–‡ å…¨é”®");
         showIdleChips();
     }
 
@@ -3300,7 +3327,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             // Engine still loading. Swallow the keystroke rather than emitting
             // raw latin into a Chinese message.
             pinyinEngine().prepare(inputMode);
-            setStatus("Loading Chinese…");
+            setStatus("Loading Chineseâ€¦");
             return true;
         }
         if (!pinyinSession.append(value.charAt(0))) {
@@ -3371,7 +3398,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             PinyinComposer composer = pinyinEngine().composerFor(inputMode);
             if (composer == null) {
                 pinyinSession = null;
-                setStatus("Loading Chinese…");
+                setStatus("Loading Chineseâ€¦");
             } else if (pinyinSession == null) {
                 pinyinSession = new PinyinSession(composer);
             } else {
@@ -3379,6 +3406,9 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             }
         } else {
             pinyinSession = null;
+            // Coming back from Chinese, where typing assistance was suppressed
+            // outright, so the lexicon may never have been asked for.
+            englishEngine().prepare();
             setStatus("Ready");
         }
         if (keyboardPanel != null) {
@@ -3404,8 +3434,8 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             return;
         }
         PopupMenu menu = new PopupMenu(this, anchor);
-        menu.getMenu().add(0, 1, 0, "中文 全键 (full pinyin)");
-        menu.getMenu().add(0, 2, 1, "中文 九键 (9-key)");
+        menu.getMenu().add(0, 1, 0, "ä¸­æ–‡ å…¨é”® (full pinyin)");
+        menu.getMenu().add(0, 2, 1, "ä¸­æ–‡ ä¹é”® (9-key)");
         menu.getMenu().add(0, 3, 2, "English");
         menu.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
@@ -3456,12 +3486,12 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             if (row == 0) {
                 line.addView(deleteKey());
             } else if (row == 1) {
-                line.addView(keyButton("，", 1.35f, v -> commitSeparator("，"), true));
+                line.addView(keyButton("ï¼Œ", 1.35f, v -> commitSeparator("ï¼Œ"), true));
             } else {
-                // The last row is one letter group short; 。 fills it so every
+                // The last row is one letter group short; ã€‚ fills it so every
                 // row keeps the same four-column geometry.
-                line.addView(keyButton("。", 1f, v -> commitSeparator("。")));
-                line.addView(keyButton("？", 1.35f, v -> commitSeparator("？"), true));
+                line.addView(keyButton("ã€‚", 1f, v -> commitSeparator("ã€‚")));
+                line.addView(keyButton("ï¼Ÿ", 1.35f, v -> commitSeparator("ï¼Ÿ"), true));
             }
             panel.addView(line);
         }
@@ -4267,13 +4297,6 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         setStatus(status);
     }
 
-    private void destroySpellChecker() {
-        if (spellCheckerSession != null) {
-            spellCheckerSession.close();
-            spellCheckerSession = null;
-        }
-    }
-
     private void openSettings() {
         Intent intent = new Intent(this, SettingsActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -4820,38 +4843,6 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         typos.put("ive", "I've");
         typos.put("ill", "I'll");
         return typos;
-    }
-
-    private static String[] commonCompletions() {
-        return new String[]{
-                "there", "their", "they", "then", "these", "them", "themselves",
-                "that", "than", "thank", "thanks", "thing", "think", "thinking",
-                "this", "those", "through", "though", "thought", "thoughts",
-                "with", "without", "within", "would", "work", "working", "works",
-                "what", "when", "where", "which", "while", "will", "well", "were",
-                "about", "actually", "after", "again", "against", "already", "also",
-                "because", "before", "being", "between", "business",
-                "can", "can't", "could", "couldn't", "current", "currently",
-                "definitely", "different", "does", "doesn't", "doing",
-                "email", "everything", "example", "actually",
-                "from", "first", "format", "function",
-                "going", "great", "grok",
-                "have", "haven't", "help", "here", "how",
-                "important", "instead", "into", "issue",
-                "keyboard", "kind",
-                "like", "little", "local",
-                "maybe", "model", "more", "much",
-                "need", "new", "next", "not", "now",
-                "openai", "option", "other",
-                "please", "probably", "prompt", "professional",
-                "really", "recording", "replace", "review", "right",
-                "settings", "should", "something", "still", "sure",
-                "text", "transcript", "transcription", "transform", "typing",
-                "using", "usually",
-                "voice", "voiceflow",
-                "want", "was", "way", "we", "what", "when", "where", "which", "who",
-                "yeah", "you", "your"
-        };
     }
 
     private final class SwipeRootLayout extends LinearLayout {
