@@ -72,8 +72,8 @@ public class PromptEditorActivity extends Activity {
         details.addView(iconRow());
         if (Prefs.canDeletePromptProfile(promptId)) {
             details.addView(divider());
-            String action = Prefs.isRelationshipStyle(promptId) ? "Hide style" : "Delete style";
-            String detail = Prefs.isRelationshipStyle(promptId)
+            String action = Prefs.isHideableTemplate(promptId) ? "Hide style" : "Delete style";
+            String detail = Prefs.isHideableTemplate(promptId)
                     ? "Remove from the recording picker"
                     : "Permanently remove this custom style";
             details.addView(actionRow(action, detail, Ui.DANGER, Ui.DANGER_SOFT, v -> confirmDelete()));
@@ -258,15 +258,16 @@ public class PromptEditorActivity extends Activity {
     }
 
     private void confirmDelete() {
+        boolean hideable = Prefs.isHideableTemplate(promptId);
         new AlertDialog.Builder(this)
-                .setTitle(Prefs.isRelationshipStyle(promptId) ? "Hide voice style?" : "Delete voice style?")
-                .setMessage(Prefs.isRelationshipStyle(promptId)
-                        ? "You can add this relationship style again from Settings."
+                .setTitle(hideable ? "Hide voice style?" : "Delete voice style?")
+                .setMessage(hideable
+                        ? "Your wording is kept, and you can add this style again from Settings."
                         : "This permanently removes the custom style from Settings and the recording picker.")
                 .setNegativeButton("Cancel", null)
-                .setPositiveButton("Delete", (dialog, which) -> {
+                .setPositiveButton(hideable ? "Hide" : "Delete", (dialog, which) -> {
                     Prefs.deletePromptProfile(this, promptId);
-                    Toast.makeText(this, Prefs.isRelationshipStyle(promptId) ? "Voice style hidden" : "Voice style deleted", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, hideable ? "Voice style hidden" : "Voice style deleted", Toast.LENGTH_SHORT).show();
                     finish();
                 })
                 .show();

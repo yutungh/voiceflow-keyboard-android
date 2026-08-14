@@ -68,17 +68,29 @@ final class XAiClient {
 
     static String transform(Context context, String transcript, String preset, int expression) throws Exception {
         String prompt = nonEmpty(Prefs.promptForPreset(context, preset, expression), Prefs.defaultPromptForPreset(preset));
-        return transformWithPrompt(context, prompt, "Transcript:\n" + transcript);
+        return transformWithPrompt(
+                context,
+                nonEmpty(
+                        Prefs.transformModelForPreset(context, preset),
+                        Prefs.defaultTransformModel(Prefs.PROVIDER_XAI)
+                ),
+                prompt,
+                "Transcript:\n" + transcript
+        );
     }
 
     static String applyInstruction(Context context, String sourceText, String instruction, String prompt) throws Exception {
         String input = "Editing instruction:\n" + instruction + "\n\nSource text:\n" + sourceText;
-        return transformWithPrompt(context, prompt, input);
+        return transformWithPrompt(
+                context,
+                nonEmpty(Prefs.transformModel(context), Prefs.defaultTransformModel(Prefs.PROVIDER_XAI)),
+                prompt,
+                input
+        );
     }
 
-    private static String transformWithPrompt(Context context, String prompt, String input) throws Exception {
+    private static String transformWithPrompt(Context context, String model, String prompt, String input) throws Exception {
         String apiKey = requiredApiKey(context);
-        String model = nonEmpty(Prefs.transformModel(context), Prefs.defaultTransformModel(Prefs.PROVIDER_XAI));
         JSONObject body = new JSONObject()
                 .put("model", model)
                 .put("temperature", 0)

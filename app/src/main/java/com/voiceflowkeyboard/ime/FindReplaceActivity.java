@@ -23,7 +23,7 @@ public class FindReplaceActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Ui.applyWindow(this);
-        setTitle("Find and replace");
+        setTitle("Personal vocabulary");
         replacements.addAll(Prefs.userPhraseReplacements(this));
         setContentView(buildContent());
     }
@@ -45,7 +45,14 @@ public class FindReplaceActivity extends Activity {
                 1f
         ));
 
-        TextView note = Ui.text(this, "Use this for names, nicknames, jargon, and phrases your speech model often hears wrong.", 14, false, Ui.MUTED);
+        TextView note = Ui.text(
+                this,
+                "Teach VoiceFlow exact spellings for names, nicknames, jargon, and commands. "
+                        + "GPT Transcribe receives the preferred spelling as a vocabulary hint, and the heard forms below provide a guaranteed local correction.",
+                14,
+                false,
+                Ui.MUTED
+        );
         note.setPadding(0, 0, 0, dp(8));
         root.addView(note);
 
@@ -67,7 +74,7 @@ public class FindReplaceActivity extends Activity {
         back.setOnClickListener(v -> finish());
         bar.addView(back);
 
-        TextView title = Ui.text(this, "Find and replace", 18, true, Ui.TEXT);
+        TextView title = Ui.text(this, "Personal vocabulary", 18, true, Ui.TEXT);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         titleParams.setMargins(dp(12), 0, dp(12), 0);
         bar.addView(title, titleParams);
@@ -94,11 +101,11 @@ public class FindReplaceActivity extends Activity {
             for (int i = 0; i < replacements.size(); i++) {
                 PhraseReplacement replacement = replacements.get(i);
                 final int index = i;
-                section.addView(row(replacement.from, replacement.to, v -> showEditor(index)));
+                section.addView(row(replacement.to, heardFormsSummary(replacement), v -> showEditor(index)));
                 section.addView(divider());
             }
         }
-        section.addView(row("+ New replacement", "Add a correction", v -> showEditor(-1)));
+        section.addView(row("+ New vocabulary", "Add an exact spelling and heard forms", v -> showEditor(-1)));
     }
 
     private View row(String title, String value, View.OnClickListener listener) {
@@ -125,23 +132,31 @@ public class FindReplaceActivity extends Activity {
         fields.setOrientation(LinearLayout.VERTICAL);
         fields.setPadding(dp(20), dp(8), dp(20), 0);
 
-        EditText from = input("What VoiceFlow hears");
-        EditText to = input("What you want instead");
+        EditText from = input("poopee\npoo pee", true);
+        EditText to = input("boobee", false);
+        EditText context = input("Optional: boobee is a nickname for my wife Amanda.", true);
         if (index >= 0) {
             from.setText(replacements.get(index).from);
             to.setText(replacements.get(index).to);
+            context.setText(replacements.get(index).context);
         }
-        fields.addView(label("Find"));
+        fields.addView(label("What VoiceFlow may hear — one form per line"));
         fields.addView(from);
-        fields.addView(label("Replace with"));
+        fields.addView(label("Exact spelling or phrase"));
         fields.addView(to);
+        fields.addView(label("Context for GPT Transcribe — optional"));
+        fields.addView(context);
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this)
                 .setTitle(index >= 0 ? "Edit replacement" : "New replacement")
                 .setView(fields)
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Save", (dialog, which) -> {
-                    PhraseReplacement replacement = new PhraseReplacement(from.getText().toString(), to.getText().toString());
+                    PhraseReplacement replacement = new PhraseReplacement(
+                            from.getText().toString(),
+                            to.getText().toString(),
+                            context.getText().toString()
+                    );
                     if (replacement.from.trim().isEmpty() || replacement.to.trim().isEmpty()) {
                         return;
                     }
@@ -173,15 +188,24 @@ public class FindReplaceActivity extends Activity {
         return label;
     }
 
-    private EditText input(String hint) {
+    private String heardFormsSummary(PhraseReplacement replacement) {
+        return String.join(" • ", replacement.heardForms());
+    }
+
+    private EditText input(String hint, boolean multiline) {
         EditText input = new EditText(this);
         input.setHint(hint);
         input.setTextColor(Ui.TEXT);
         input.setHintTextColor(Ui.MUTED);
-        input.setSingleLine(true);
+        input.setSingleLine(!multiline);
+        input.setMinLines(multiline ? 2 : 1);
+        input.setMaxLines(multiline ? 4 : 1);
+        input.setGravity(Gravity.TOP | Gravity.START);
         input.setPadding(dp(12), dp(8), dp(12), dp(8));
         input.setBackground(Ui.roundedStroke(this, Ui.SURFACE, 12, Ui.DIVIDER));
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        input.setInputType(InputType.TYPE_CLASS_TEXT
+                | (multiline ? InputType.TYPE_TEXT_FLAG_MULTI_LINE : 0)
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         return input;
     }
 

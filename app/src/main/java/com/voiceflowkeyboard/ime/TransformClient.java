@@ -61,7 +61,7 @@ final class TransformClient {
                 + "When the request does not specify its own audience or tone, use this selected voice style as a default:\n"
                 + Prefs.styleGuidanceForPreset(context, preset) + "\n\n"
                 + "Selected expression level: " + Prefs.expressionLabel(expression) + "\n"
-                + Prefs.expressionGuidance(preset, expression);
+                + Prefs.expressionGuidanceForPreset(context, preset, expression);
         String provider = Prefs.transformProvider(context);
         if (Prefs.PROVIDER_ANTHROPIC.equals(provider)) {
             return AnthropicClient.applyInstruction(context, "", request, prompt);
@@ -90,7 +90,7 @@ final class TransformClient {
                 + "Apply this guidance to tone and relationship context without changing the message:\n"
                 + styleGuidance + "\n\n"
                 + "Selected expression level: " + Prefs.expressionLabel(expression) + "\n"
-                + Prefs.expressionGuidance(preset, expression);
+                + Prefs.expressionGuidanceForPreset(context, preset, expression);
         String provider = Prefs.transformProvider(context);
         if (Prefs.PROVIDER_ANTHROPIC.equals(provider)) {
             return AnthropicClient.applyInstruction(context, sourceText, instruction, TRANSLATION_PROMPT);

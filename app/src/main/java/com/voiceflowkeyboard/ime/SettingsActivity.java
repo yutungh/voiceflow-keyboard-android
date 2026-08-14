@@ -29,6 +29,7 @@ public class SettingsActivity extends Activity {
     private CheckBox transformEnabledInput;
     private CheckBox translationEnabledInput;
     private TextView translationLanguageValue;
+    private TextView chineseLayoutValue;
     private String selectedPreset;
     private boolean created;
     private boolean downloadingOfflineModel;
@@ -95,6 +96,24 @@ public class SettingsActivity extends Activity {
         translationLanguageValue = rowValue(Prefs.translationTargetLanguage(this));
         translation.addView(row("Target language", translationLanguageValue, ">", v -> showTranslationLanguageDialog()));
 
+        LinearLayout chinese = section(root, "Chinese input");
+        CheckBox chineseEnabledInput = new CheckBox(this);
+        chineseEnabledInput.setChecked(Prefs.chineseInputEnabled(this));
+        chinese.addView(checkboxDetailRow(
+                "Enable Chinese input",
+                "Adds a 中/EN key beside 123 for pinyin typing and Chinese dictation",
+                chineseEnabledInput,
+                () -> {
+                    Prefs.setChineseInputEnabled(this, chineseEnabledInput.isChecked());
+                    setContentView(buildContent());
+                }
+        ));
+        if (Prefs.chineseInputEnabled(this)) {
+            chinese.addView(divider());
+            chineseLayoutValue = rowValue(Prefs.chineseLayoutLabel(Prefs.chineseLayout(this)));
+            chinese.addView(row("Pinyin layout", chineseLayoutValue, ">", v -> showChineseLayoutDialog()));
+        }
+
         LinearLayout prompts = section(root, "Voice styles");
         List<PromptProfile> profiles = Prefs.promptProfiles(this);
         for (int i = 0; i < profiles.size(); i++) {
@@ -103,7 +122,10 @@ public class SettingsActivity extends Activity {
             prompts.addView(divider());
         }
         for (PromptProfile template : Prefs.hiddenVoiceStyleTemplates(this)) {
-            prompts.addView(row("+ " + template.displayName(), "Add relationship style", ">", v -> {
+            String templateDetail = Prefs.isRelationshipStyle(template.id)
+                    ? "Add relationship style"
+                    : "Add built-in style";
+            prompts.addView(row("+ " + template.displayName(), templateDetail, ">", v -> {
                 Prefs.addVoiceStyleTemplate(this, template.id);
                 setContentView(buildContent());
             }));
@@ -111,10 +133,24 @@ public class SettingsActivity extends Activity {
         }
         prompts.addView(row("+ New voice style", "Create a custom style", ">", v -> showNewPromptDialog()));
 
-        LinearLayout replacements = section(root, "Find and replace");
-        replacements.addView(row("Personal replacements", replacementSummary(), ">", v -> startActivity(new Intent(this, FindReplaceActivity.class))));
+        LinearLayout replacements = section(root, "Personal vocabulary");
+        replacements.addView(row(
+                "Names, jargon, and commands",
+                replacementSummary(),
+                ">",
+                v -> startActivity(new Intent(this, FindReplaceActivity.class))
+        ));
 
         LinearLayout advanced = section(root, "Advanced");
+        CheckBox cancelHiddenRecordingInput = new CheckBox(this);
+        cancelHiddenRecordingInput.setChecked(Prefs.cancelRecordingWhenHidden(this));
+        advanced.addView(checkboxDetailRow(
+                "Cancel hidden recordings",
+                "Stop and discard an active recording when the keyboard closes or the app changes",
+                cancelHiddenRecordingInput,
+                () -> Prefs.setCancelRecordingWhenHidden(this, cancelHiddenRecordingInput.isChecked())
+        ));
+        advanced.addView(divider());
         advanced.addView(row("Keyboard test", "Open test field", ">", v -> startActivity(new Intent(this, KeyboardTestActivity.class))));
         advanced.addView(divider());
         advanced.addView(row("Android keyboard settings", "System settings", ">", v -> startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))));
@@ -274,6 +310,41 @@ public class SettingsActivity extends Activity {
         return row;
     }
 
+    private View checkboxDetailRow(
+            String title,
+            String subtitle,
+            CheckBox checkBox,
+            Runnable onChanged
+    ) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(dp(66));
+        row.setPadding(dp(14), dp(8), dp(10), dp(8));
+        row.setClickable(true);
+        row.setOnClickListener(v -> {
+            checkBox.setChecked(!checkBox.isChecked());
+            onChanged.run();
+        });
+
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.addView(text(title, 16, true, Ui.TEXT));
+        TextView detail = text(subtitle, 12, false, Ui.MUTED);
+        detail.setPadding(0, dp(3), dp(8), 0);
+        labels.addView(detail);
+        row.addView(labels, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
+
+        checkBox.setButtonTintList(android.content.res.ColorStateList.valueOf(Ui.ACCENT));
+        checkBox.setOnClickListener(v -> onChanged.run());
+        row.addView(checkBox);
+        return row;
+    }
+
     private TextView rowValue(String value) {
         TextView text = text(value == null || value.trim().isEmpty() ? "Not set" : value.trim(), 13, false, Ui.MUTED);
         text.setSingleLine(true);
@@ -307,6 +378,29 @@ public class SettingsActivity extends Activity {
                     selectedPreset = values[which];
                     activeProfileValue.setText(labels[which]);
                     saveCurrentSettings();
+                })
+                .show();
+    }
+
+    private void showChineseLayoutDialog() {
+        String[] values = {Prefs.CHINESE_LAYOUT_QWERTY, Prefs.CHINESE_LAYOUT_KEYPAD};
+        String[] labels = new String[values.length];
+        int checked = 0;
+        String selected = Prefs.chineseLayout(this);
+        for (int i = 0; i < values.length; i++) {
+            labels[i] = Prefs.chineseLayoutLabel(values[i]);
+            if (values[i].equals(selected)) {
+                checked = i;
+            }
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Pinyin layout")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    Prefs.setChineseLayout(this, values[which]);
+                    if (chineseLayoutValue != null) {
+                        chineseLayoutValue.setText(Prefs.chineseLayoutLabel(values[which]));
+                    }
+                    dialog.dismiss();
                 })
                 .show();
     }

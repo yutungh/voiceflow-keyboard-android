@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Offline Apple-like autocorrect for an Android keyboard — Research</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Newsreader:ital,opsz@0,6..72;1,6..72&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   SHARED REPORT SHELL  (v2 — fragment-slot, verification-native, agent-agnostic)
+   COLOR SEMANTICS (v2):  --pos (green) = CONFIRMED / survived scrutiny.
+   --neg (red/rust) = KILLED / caution / verify-this. Agreement = NEUTRAL accent.
+   ========================================================================== */
+:root{
+  /* slate-azure (software/AI/devtools) */
+  --ink:#16202e; --ink-soft:#33445a; --paper:#f1f1ea; --paper-2:#e6e7dc;
+  --accent:#3a6ea5; --accent-2:#5b8fc4; --pos:#2f7d5a; --pos-bright:#3a9f73;
+  --neg:#b0402c; --line:#c7c6b6;
+  --shadow:rgba(20,20,20,.16);
+  --page:1180px;
+}
+
+/* ====================== LOCKED BELOW — do not edit ======================= */
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:'Newsreader',Georgia,serif;font-size:19px;line-height:1.62;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:999;opacity:.03;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+.progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:1000;background:linear-gradient(90deg,var(--accent),var(--pos))}
+h1,h2,h3,h4,h5{font-family:'Fraunces',serif;letter-spacing:-.01em}
+.mono{font-family:'IBM Plex Mono',monospace}
+.measure{max-width:72ch}
+a{color:var(--pos);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--pos) 35%,transparent)}
+a:hover{border-bottom-color:var(--pos)}
+em{font-style:italic}
+
+/* ---------- masthead ---------- */
+.masthead{background:var(--ink);color:var(--paper);padding:14px 0;border-bottom:3px double var(--accent)}
+.masthead .bar{max-width:var(--page);margin:0 auto;padding:0 28px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
+.brandmark{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent)}
+.dateline{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:color-mix(in srgb,var(--paper) 70%,var(--ink))}
+
+/* ---------- hero + answer ---------- */
+.hero{padding:64px 0 48px}
+.kicker{font-family:'IBM Plex Mono',monospace;font-size:12.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--pos);margin-bottom:22px;display:flex;align-items:center;gap:12px}
+.kicker::before{content:"";width:46px;height:2px;background:var(--accent)}
+.q{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(34px,5.2vw,64px);line-height:1.03;letter-spacing:-.015em;margin-bottom:8px;max-width:18ch}
+.q .em{font-style:italic;font-weight:500;color:var(--pos)}
+.q-sub{font-style:italic;color:var(--ink-soft);font-size:clamp(17px,2vw,21px);max-width:60ch;margin-top:18px}
+.answer-card{margin-top:46px;background:var(--ink);color:var(--paper);border-radius:3px;padding:38px 40px;position:relative;overflow:hidden;box-shadow:0 26px 60px -28px var(--shadow);max-width:62ch}
+.answer-card .glyph{position:absolute;right:-10px;bottom:-54px;font-family:'Fraunces',serif;font-weight:900;font-size:260px;color:color-mix(in srgb,var(--accent-2) 9%,transparent);line-height:1;pointer-events:none}
+.answer-card .lbl{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--accent);margin-bottom:16px}
+.answer-card p{font-family:'Fraunces',serif;font-size:clamp(20px,2.4vw,27px);line-height:1.4;font-weight:400;position:relative;z-index:2}
+.answer-card strong{color:var(--pos-bright);font-weight:600}
+.answer-card .big{color:color-mix(in srgb,var(--accent-2) 60%,var(--paper));font-weight:600;font-style:italic}
+.tailored{margin-top:22px;display:flex;gap:14px;align-items:flex-start;font-size:15.5px;color:var(--ink-soft);background:var(--paper-2);border-left:3px solid var(--accent);padding:16px 20px;border-radius:2px;max-width:72ch}
+.tailored b{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--pos);display:block;margin-bottom:4px}
+
+/* ---------- layout grid ---------- */
+.layout{max-width:var(--page);margin:0 auto;padding:0 28px;display:grid;grid-template-columns:minmax(0,1fr);gap:0 52px}
+.rail-left,.rail-right{display:none}
+.article{min-width:0}
+@media(min-width:1440px){:root{--page:1520px}.layout{grid-template-columns:minmax(0,1fr) 300px}.rail-right{display:block;grid-column:2}}
+@media(min-width:2560px){:root{--page:2080px}.layout{grid-template-columns:300px minmax(0,1fr) 320px}.rail-left{display:block;grid-column:1}.article{grid-column:2}.rail-right{grid-column:3}}
+.rail-left .stick,.rail-right .stick{position:sticky;top:24px;padding:34px 0}
+.rail-right .stick{border-left:1px solid var(--line);padding-left:26px}
+.rail-left .stick{border-right:1px solid var(--line);padding-right:26px}
+.rail h6{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin:22px 0 9px}
+.rail h6:first-child{margin-top:0}
+.rail .ans{font-family:'Fraunces',serif;font-size:18px;line-height:1.35;color:var(--ink)}
+.rail .meta{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);line-height:1.75}
+.toc{list-style:none;display:grid;gap:7px}
+.toc a{display:block;font-size:14px;color:var(--ink-soft);border:none;font-family:'Newsreader',serif}
+.toc a:hover{color:var(--pos)}
+.toc .tn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent);margin-right:8px}
+.chip-row{display:flex;flex-wrap:wrap;gap:7px}
+.chip-row .c{font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--paper-2);border:1px solid var(--line);padding:5px 10px;border-radius:3px;color:var(--ink-soft)}
+
+/* ---------- section frame ---------- */
+section{padding:54px 0;border-top:1px solid var(--line)}
+.article > section:first-child{border-top:none}
+.sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:30px}
+.sec-num{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--accent);letter-spacing:.1em;padding-top:6px}
+.sec-title{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(26px,3.2vw,40px);letter-spacing:-.01em;line-height:1.05}
+
+/* ---------- prose ---------- */
+.prose p{margin-bottom:16px;max-width:72ch}
+.prose h3{font-family:'Fraunces',serif;font-weight:600;font-size:25px;margin:38px 0 12px;color:var(--ink)}
+.prose b{color:var(--pos)}
+.cite{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent);vertical-align:super;padding:0 1px}
+blockquote{margin:0 0 18px;padding:14px 22px;border-left:3px solid var(--accent);background:var(--paper-2);font-style:italic;color:var(--ink-soft);font-size:16px;max-width:72ch}
+
+/* ---------- why bullets ---------- */
+.why{display:grid;gap:18px}
+.why .row{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;background:var(--paper-2);border-radius:3px;padding:22px 24px;border:1px solid var(--line);transition:transform .3s ease,box-shadow .3s ease}
+.why .row:hover{transform:translateY(-3px);box-shadow:0 14px 30px -18px var(--shadow)}
+.why .n{font-family:'Fraunces',serif;font-weight:900;font-size:38px;color:var(--accent);line-height:.9}
+.why .row p{font-size:17.5px}
+.why .row b{color:var(--pos)}
+@media(min-width:2560px){.why{grid-template-columns:1fr 1fr;gap:18px 22px}}
+
+/* ---------- agreement ---------- */
+.agree{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 10%,transparent),color-mix(in srgb,var(--accent) 3%,transparent));border-radius:4px;padding:8px 28px 12px;border:1px solid color-mix(in srgb,var(--accent) 26%,transparent)}
+.agree .tag{display:inline-flex;align-items:center;gap:9px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;padding:7px 14px;border-radius:999px;margin:20px 0 6px;background:var(--accent);color:var(--paper)}
+.agree ul{list-style:none;display:grid;gap:14px;padding:14px 0 8px}
+.agree li{display:grid;grid-template-columns:auto 1fr;gap:14px;font-size:17px}
+.agree li .ck{color:var(--accent);font-weight:700;font-family:'IBM Plex Mono',monospace}
+.agree li b{color:var(--ink)}
+
+/* ---------- dispute ---------- */
+.contest{display:grid;gap:24px}
+.dispute{border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--paper-2)}
+.dispute .top{background:var(--neg);color:var(--paper);padding:16px 22px;font-family:'Fraunces',serif;font-style:italic;font-size:19px;display:flex;gap:12px;align-items:baseline}
+.dispute .top .qm{font-family:'IBM Plex Mono',monospace;font-style:normal;font-size:12px;letter-spacing:.18em;opacity:.85;text-transform:uppercase}
+.views{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+.views .v{background:var(--paper);padding:20px 22px}
+.views .v .who{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px}
+.v.claude .who{color:var(--accent)}
+.v.codex .who{color:var(--accent-2)}
+.views .v p{font-size:16px;line-height:1.55}
+.resolve{padding:18px 22px;background:var(--ink);color:var(--paper);font-size:16.5px}
+.resolve .who{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-2);margin-bottom:7px}
+.resolve b{color:var(--pos-bright)}
+@media(max-width:640px){.views{grid-template-columns:1fr}}
+
+/* ---------- structured-grid ---------- */
+.grid-cards{display:grid;gap:18px;margin-top:8px}
+@media(min-width:1100px){.grid-cards{grid-template-columns:1fr 1fr}}
+@media(min-width:2560px){.grid-cards{grid-template-columns:1fr 1fr 1fr}}
+.gcard{background:var(--paper-2);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:3px;padding:22px 26px;transition:transform .25s,box-shadow .25s}
+.gcard:hover{transform:translateY(-2px);box-shadow:0 16px 34px -20px var(--shadow)}
+.gcard.hot{border-left-color:var(--pos)}
+.gcard.killed{border-left-color:var(--neg)}
+.gcard .name{font-family:'Fraunces',serif;font-weight:600;font-size:22px;line-height:1.1}
+.gcard .name span{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--pos);margin-top:6px;font-weight:500}
+.gcard .big-stat{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(26px,3vw,38px);color:var(--pos);line-height:.95;margin:10px 0}
+.gcard .desc{font-size:16px;color:var(--ink-soft);line-height:1.5}
+.gcard .desc b{color:var(--ink)}
+.tagline{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;background:var(--neg);color:var(--paper);padding:3px 9px;border-radius:3px;margin-top:8px}
+.tagline.ok{background:var(--pos)}
+
+/* ---------- spotlight ---------- */
+.spotlight{background:var(--ink);color:var(--paper);border-radius:4px;padding:34px 36px;margin:10px 0 4px;position:relative;overflow:hidden}
+.spotlight h4{font-family:'Fraunces',serif;font-size:24px;font-weight:600;margin-bottom:6px;color:color-mix(in srgb,var(--accent-2) 55%,var(--paper))}
+.spotlight p{color:color-mix(in srgb,var(--paper) 78%,var(--ink));font-size:16px}
+.spotlight .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:22px 0 8px;font-family:'IBM Plex Mono',monospace;font-size:13px}
+.spotlight .chip{background:color-mix(in srgb,var(--paper) 10%,transparent);border:1px solid color-mix(in srgb,var(--accent-2) 40%,transparent);padding:10px 16px;border-radius:4px;color:var(--paper)}
+.spotlight .chip b{color:var(--pos-bright);display:block;font-family:'Fraunces',serif;font-size:20px;font-weight:700}
+.spotlight .op{color:var(--accent);font-size:22px}
+.spotlight .note{font-size:15px;color:color-mix(in srgb,var(--paper) 72%,var(--ink));margin-top:18px;font-style:italic}
+
+/* ---------- sources ---------- */
+.sources{display:grid;gap:2px}
+@media(min-width:2560px){.sources{grid-template-columns:1fr 1fr;gap:2px 36px}}
+.src{display:grid;grid-template-columns:34px 1fr auto;gap:14px;padding:14px 16px;align-items:baseline;border-bottom:1px solid var(--line);font-size:15px}
+.src:hover{background:var(--paper-2)}
+.src .si{font-family:'IBM Plex Mono',monospace;color:var(--accent);font-size:13px}
+.src .st{color:var(--ink)}
+.src .st a{color:var(--pos)}
+.src .st .note{display:block;color:var(--ink-soft);font-size:13.5px;margin-top:3px;font-style:italic}
+.src .smeta{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.04em;text-align:right;white-space:nowrap}
+.badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9.5px;letter-spacing:.06em}
+.b-both{background:var(--accent);color:#fff}
+.b-c{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.b-cx{background:color-mix(in srgb,var(--accent-2) 22%,transparent);color:var(--ink-soft)}
+.src.stale{opacity:.62}
+.src.stale .st::after{content:" ⚠ historical / not current";color:var(--neg);font-size:11px;font-family:'IBM Plex Mono',monospace}
+
+/* ---------- footer ---------- */
+footer{background:var(--ink);color:color-mix(in srgb,var(--paper) 70%,var(--ink));padding:46px 0 60px;border-top:3px double var(--accent);margin-top:30px}
+footer .bar{max-width:var(--page);margin:0 auto;padding:0 28px;font-size:14px;line-height:1.7}
+footer h5{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent-2);margin-bottom:14px}
+footer a{color:var(--pos-bright)}
+footer b{color:color-mix(in srgb,var(--accent-2) 55%,var(--paper))}
+.foot-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:36px}
+@media(max-width:640px){.foot-grid{grid-template-columns:1fr}}
+.disc{margin-top:28px;padding-top:20px;border-top:1px solid color-mix(in srgb,var(--paper) 20%,var(--ink));font-size:12.5px;color:color-mix(in srgb,var(--paper) 52%,var(--ink));font-style:italic}
+.rv{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+.rv.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
+</style>
+</head>
+<body>
+<div class="progress" id="prog"></div>
+
+<!-- ============ MASTHEAD ============ -->
+<div class="masthead">
+  <div class="bar">
+    <div class="brandmark">◆ Keyboard Engineering Desk</div>
+    <div class="dateline">FILED 2026·07·04 · CLAUDE × CODEX</div>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- ===== LEFT RAIL ===== -->
+  <aside class="rail rail-left">
+    <div class="stick">
+      <h6>Two reasoners</h6>
+      <p class="meta">Claude (3 parallel subagents)<br>Codex CLI (independent, source-level)<br>Reconciled · 0 open standoffs</p>
+      <h6>Tooling</h6>
+      <div class="chip-row">
+        <span class="c">WebSearch</span><span class="c">GitHub repos</span><span class="c">LICENSE files</span><span class="c">AOSP source</span>
+      </div>
+      <h6>Freshness window</h6>
+      <p class="meta">Repo activity ≤ 12 mo<br>Algorithms = evergreen<br>Freshest src 2026-05-17</p>
+      <h6>Evidence</h6>
+      <p class="meta">21 consolidated sources<br>Primary-verified licenses<br>+ maintenance dates</p>
+    </div>
+  </aside>
+
+  <!-- ===== ARTICLE ===== -->
+  <main class="article">
+
+    <!-- HERO -->
+    <header class="hero">
+      <div class="kicker">Android IME · Offline autocorrect · MIT-licensed app</div>
+      <h1 class="q">A GitHub package to give our keyboard <span class="em">Apple-grade autocorrect.</span></h1>
+      <p class="q-sub">Fully offline: silent typo replace, a 3-word suggestion bar, next-word prediction, and smart auto-capitalize / punctuation — dropped into a native Java <code>InputMethodService</code> that already has the chip strip.</p>
+      <div class="answer-card rv">
+        <div class="glyph">⌨</div>
+        <div class="lbl">The One-Sentence Answer</div>
+        <p>No single permissive package delivers all four Apple behaviors — so <strong>layer permissive libraries</strong>: <span class="big">JSymSpell (MIT)</span> for correction + a small next-word layer + your own smart rules, or vendor the <strong>AOSP LatinIME engine (Apache-2.0)</strong> for max fidelity. Never bundle GPL keyboards (HeliBoard/OpenBoard) or AOSP's Lexiteria dictionaries.</p>
+      </div>
+      <div class="tailored rv">
+        <span>◆</span>
+        <div><b>Tailored for</b> a solo dev's MIT-licensed, Java, offline Android keyboard that already has a suggestion chip strip and platform spell-checker plumbing — figures accurate as of <strong>2026-05-17</strong>.</div>
+      </div>
+    </header>
+
+    <!-- 01 WHY -->
+    <section id="why">
+      <div class="sec-head"><span class="sec-num">01</span><h2 class="sec-title">Why this answer</h2></div>
+      <div class="why">
+        <div class="row rv"><div class="n">1</div><p><b>License is the real constraint, not capability.</b> The best turnkey engines (HeliBoard, OpenBoard) are GPL-3.0. An APK is one conveyed binary with no linking escape hatch, so bundling their code would force your whole MIT app to GPL. Only Apache-2.0 and MIT/BSD code is safe to ship.</p></div>
+        <div class="row rv"><div class="n">2</div><p><b>"Apple-like" is a scoring engine, not a spellchecker.</b> The piece plain spellcheckers lack is a keyboard key-proximity model — weighting corrections by physical key distance is what makes fat-finger fixes feel native. That, plus an n-gram language model and a confidence-gated silent replace, is the whole trick.</p></div>
+        <div class="row rv"><div class="n">3</div><p><b>Your platform spell-checker can't get you there.</b> <code>SpellCheckerSession</code> is async, depends on whatever checker the user installed, and has no proximity model, no next-word prediction, and no controllable silent replace. Demote it to a fallback; make a bundled in-process engine the source of truth.</p></div>
+        <div class="row rv"><div class="n">4</div><p><b>You already own the hard plumbing.</b> The chip strip, a pending-correction concept, and commit hooks are done. The work is swapping a real correction engine behind them and adding deterministic smart rules — not rebuilding the keyboard.</p></div>
+      </div>
+    </section>
+
+    <!-- 02 RANKED PACKAGES -->
+    <section id="packages">
+      <div class="sec-head"><span class="sec-num">02</span><h2 class="sec-title">The packages, ranked for your case</h2></div>
+      <div class="grid-cards">
+        <div class="gcard hot rv">
+          <div class="name">JSymSpell<span>MIT · Java · Maven Central · active</span></div>
+          <div class="big-stat">Drop-in</div>
+          <div class="desc">The only genuine Gradle dependency here (<code>io.gitlab.rxp90:jsymspell</code>, v1.1.4, 2026-05-17). Symmetric-Delete edit-distance correction + frequency-ranked suggestions. <b>Boundary:</b> correction only — no next-word, no auto-cap. Pair with the layers below.</div>
+          <span class="tagline ok">BEST STARTING POINT</span>
+        </div>
+        <div class="gcard hot rv">
+          <div class="name">AOSP LatinIME engine<span>Apache-2.0 · Java + native C++</span></div>
+          <div class="big-stat">Full engine</div>
+          <div class="desc">The genuine Apple/AOSP behavior in one engine: proximity-weighted correction + n-gram next-word + smart rules. <b>No artifact</b> — vendor the source (<code>Suggest</code>, <code>DictionaryFacilitator</code>, <code>WordComposer</code>, <code>BinaryDictionary</code>, <code>InputLogic</code>) and build the <code>.so</code> with NDK.</div>
+          <span class="tagline ok">MAX FIDELITY</span>
+        </div>
+        <div class="gcard rv">
+          <div class="name">AnySoftKeyboard<span>Apache-2.0 · Java · active</span></div>
+          <div class="big-stat">Prediction</div>
+          <div class="desc">v1.13-r1 (2026-02-08). Pure-JVM dictionary + real <b>next-word prediction</b> via n-gram packs. Not an artifact — extract its <code>Suggest</code>/dictionary classes. License- and language-compatible; best source for the prediction half.</div>
+          <span class="tagline ok">SAFE APACHE BASE</span>
+        </div>
+        <div class="gcard rv">
+          <div class="name">customized-symspell<span>MIT · Java</span></div>
+          <div class="big-stat">Fat-finger</div>
+          <div class="desc">Adds weighted Damerau-Levenshtein + <b>QWERTY keyboard-distance weighting</b> — valuable for Apple-like corrections. <b>Stale</b> (last stable 2020-12-15). Borrow the keyboard-distance idea rather than depending on it.</div>
+          <span class="tagline">UNMAINTAINED</span>
+        </div>
+        <div class="gcard killed rv">
+          <div class="name">HeliBoard / OpenBoard<span>GPL-3.0</span></div>
+          <div class="big-stat">Reference only</div>
+          <div class="desc">HeliBoard (v3.9, active) is the closest live proof AOSP-style autocorrect still works well — but <b>GPL-3.0 infects an MIT app</b>. OpenBoard is archived (2022). Read them for approach; never ship their code.</div>
+          <span class="tagline">DO NOT BUNDLE</span>
+        </div>
+        <div class="gcard killed rv">
+          <div class="name">FlorisBoard nlpcore<span>Apache-2.0 · not shipped</span></div>
+          <div class="big-stat">Not yet</div>
+          <div class="desc">Best <i>license</i> fit for a unified engine, but its own README says word suggestions / spell checking are a <b>v0.6 goal, not in current releases</b>. One to watch; can't depend on it today.</div>
+          <span class="tagline">IMMATURE</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 AGREEMENT -->
+    <section id="agree">
+      <div class="sec-head"><span class="sec-num">03</span><h2 class="sec-title">Where Claude and Codex converged</h2></div>
+      <div class="agree rv">
+        <span class="tag">↔ Independent agreement</span>
+        <ul>
+          <li><span class="ck">›</span><span>No clean permissive drop-in gives all four Apple behaviors; the closest permissive <b>engine</b> is AOSP LatinIME, the closest live <b>behavioral reference</b> is HeliBoard (GPL-blocked).</span></li>
+          <li><span class="ck">›</span><span><b>GPL-3.0 = do not bundle</b> in an MIT app; Apache-2.0 / MIT = safe; LGPL is high-friction on Android; AGPL avoid.</span></li>
+          <li><span class="ck">›</span><span><b>Replace <code>SpellCheckerSession</code></b> as the primary hot-path engine — keep it only as a secondary underline / long-press service.</span></li>
+          <li><span class="ck">›</span><span>The <b>5-layer architecture</b> is identical in both passes: dictionary + frequency → proximity candidate generation from the tap stream → n-gram LM scoring → confidence-gated silent replace with a typed-word escape hatch + backspace revert → commit-time smart rules.</span></li>
+          <li><span class="ck">›</span><span><b>Next-word prediction</b> = when no word is composing, feed n-gram successors of the last word(s) into the same 3-chip strip; learn user n-grams on-device and demote rejected corrections.</span></li>
+          <li><span class="ck">›</span><span><b>SCOWL / ESDB</b> is the safe permissive base lexicon; FlorisBoard's NLP core isn't shipped yet.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 04 DISAGREEMENT -->
+    <section id="dispute">
+      <div class="sec-head"><span class="sec-num">04</span><h2 class="sec-title">Where they differed — and how it resolved</h2></div>
+      <div class="contest">
+        <div class="dispute rv">
+          <div class="top"><span class="qm">Point 1 · material</span><span>Are AOSP's bundled dictionaries safe to ship?</span></div>
+          <div class="views">
+            <div class="v claude"><div class="who">Claude</div><p>Implied the English AOSP <code>.dict</code> is "generally fine"; flagged only that <i>some</i> language dictionaries are GPLv2.</p></div>
+            <div class="v codex"><div class="who">Codex</div><p>Read the AOSP <code>NOTICE</code> file directly: <i>"Includes Dictionaries © Lexiteria LLC. Used by permission."</i> → the dictionary <b>data</b> is not freely redistributable, even though the engine code is Apache-2.0.</p></div>
+          </div>
+          <div class="resolve"><div class="who">Resolution</div><p><b>Codex is right</b> — a primary-source NOTICE beats an assumption. Use the AOSP <b>engine</b>, not its dictionary blobs. Both agents already land on <b>SCOWL/ESDB</b> as the base lexicon, so the recommendation only sharpens: generate your own English dictionary and learn user n-grams on-device.</p></div>
+        </div>
+        <div class="dispute rv">
+          <div class="top"><span class="qm">Point 2 · emphasis</span><span>Lead with "vendor AOSP LatinIME," or a "layered permissive build"?</span></div>
+          <div class="views">
+            <div class="v claude"><div class="who">Claude</div><p>Leads with a layered JSymSpell + AnySoftKeyboard build as the pragmatic first move; surfaced <b>JSymSpell</b>, the only true Maven drop-in.</p></div>
+            <div class="v codex"><div class="who">Codex</div><p>Ranks vendoring the AOSP LatinIME core #1 (best architectural match); pinpointed the exact classes to lift, but never surfaced pure spell-correction libraries.</p></div>
+          </div>
+          <div class="resolve"><div class="who">Resolution</div><p>Not a factual conflict — an <b>effort-vs-fidelity tradeoff</b>. Since you want a package drop-in and want to ship, <b>start with Path A (layered)</b>, with a clean upgrade road to Path B (AOSP) if the touch-model fidelity proves insufficient. Both finds are kept: JSymSpell for speed, Codex's class list for the upgrade.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 THE BUILD -->
+    <section id="build">
+      <div class="sec-head"><span class="sec-num">05</span><h2 class="sec-title">How to actually build it</h2></div>
+
+      <div class="spotlight rv">
+        <h4>Recommended stack — Path A (ships in days, stays cleanly MIT)</h4>
+        <p>Keep your chip strip. Behind it, layer four permissive pieces instead of chasing one impossible drop-in:</p>
+        <div class="flow">
+          <span class="chip"><b>JSymSpell</b> typo replace + suggestions · MIT</span>
+          <span class="op">+</span>
+          <span class="chip"><b>Key-proximity</b> weighting from your layout XML</span>
+          <span class="op">+</span>
+          <span class="chip"><b>Bigram</b> next-word · AnySoftKeyboard approach · Apache-2.0</span>
+          <span class="op">+</span>
+          <span class="chip"><b>Rules</b> auto-cap · double-space · apostrophes</span>
+        </div>
+        <p class="note">Data: build the dictionary from SCOWL/ESDB (permissive) + a Google-Books-Ngram-derived frequency table (CC-BY, attribution). Avoid CC-BY-SA data (wordfreq, FrequencyWords, Norvig's big.txt) verbatim in a shipped product.</p>
+      </div>
+
+      <div class="prose rv" style="margin-top:34px">
+        <h3>The engine, in five layers</h3>
+        <p>Think of it as a noisy-channel decoder — the user <i>intended</i> a word, the "channel" (fat fingers) produced the taps, and you recover <span class="mono">argmax P(word) × P(taps | word)</span>. Concretely:<span class="cite">10,12</span></p>
+        <p><b>1 · Lexicon + frequency</b> in a DAWG/trie with a per-word frequency byte — O(word-length) lookup and free prefix completion. Frequency alone already fixes ~80% of typos.<span class="cite">11</span> <b>2 · Candidate generation</b> via Damerau-Levenshtein (transposition counts as one edit, so "teh"→"the" is a single step). Don't brute-force at runtime — SymSpell precomputes deletes, or you walk the DAWG with a Levenshtein-automaton row. Budget edit-distance 1 for short words, 2 for longer.<span class="cite">5,10</span></p>
+        <p><b>3 · Key-proximity / touch model</b> — the Apple-defining layer. If you capture tap coordinates, model each touch as a 2-D Gaussian over the intended key; if you only have committed characters, build a key-adjacency map and make substitution cost a function of adjacency (~0.5 for neighbors vs 1.0 for far keys). This is what makes fat-finger fixes feel native.<span class="cite">1,12</span> <b>4 · Language-model scoring</b> blends spatial score with n-gram probability: <span class="mono">score = α·spatial + β·unigram + γ·bigram</span>, with stupid-backoff. Next-word prediction is the same table read forward: top bigram successors of the last committed word.<span class="cite">3</span></p>
+        <p><b>5 · The auto-replace decision + smart rules.</b> Silently replace only when the typed string isn't itself a common word, the best candidate beats it by a margin, and the edit distance is small — otherwise just show it in the strip. Keep the typed word as a tap-to-reject escape hatch, and make the <i>first backspace after a correction restore the original</i> (Apple/AOSP behavior). Then the cheap deterministic wins: auto-capitalize sentence starts, double-space→". ", an apostrophe lookup table (dont→don't, i→I), and suppress correction entirely in URL/email/password fields.<span class="cite">3,7</span></p>
+
+        <h3>Wiring it into your InputMethodService</h3>
+        <p>You keep the UI and replace the hot path.<span class="cite">14,15</span> Per keystroke: maintain the composing buffer (and tap coordinates, if you have them), recompute candidates, update <code>setComposingText</code> and push the top 3 to your strip. At a commit boundary (space / punctuation / newline): run the confidence gate, <code>commitText</code> the correction plus separator, store a <code>LastCorrection{original, committed, offset}</code> record, then repopulate the strip with next-word predictions. Use <code>onUpdateSelection</code> only to <i>observe</i> cursor moves and reset state — not to re-trigger correction.</p>
+        <p><b>Threading:</b> run the engine on a single background HandlerThread or serial executor; debounce and tag each request with a generation counter so stale results are dropped, then post updates to the main looper. Load the DAWG once at <code>onCreate</code>, memory-mapped. <b>Revert:</b> on the immediate backspace, <code>deleteSurroundingText</code> then <code>commitText(original)</code>; any other key or cursor move clears the record. Persist a small user unigram/bigram store (SQLite or a file) separate from the immutable bundled DAWG so the keyboard "stops fighting you."</p>
+        <p><b>Budget:</b> an English DAWG + bigram table sits around <b>5–20 MB resident</b> (mmap'd), per-keystroke compute is sub-5 ms, and end-to-end stays under one 16 ms frame — the debounce is what protects that under fast typing. Codex confirmed from HeliBoard's live source that this exact stack (<code>getSuggestionsNative</code> taking <code>proximityInfo</code>, <code>xCoordinates</code>, <code>yCoordinates</code>, <code>times</code>; <code>getNgramProbabilityNative</code> with up to 3 previous words; separator-triggered auto-correct and backspace revert in <code>InputLogic</code>) is still what ships in 2026.<span class="cite">3,6,7</span></p>
+
+        <h3>The license bottom line</h3>
+        <p>An APK conveys everything you bundle as one binary — there's no dynamic-linking loophole. So: <b>Apache-2.0</b> (AOSP LatinIME) and <b>MIT/BSD</b> (JSymSpell) are safe, and Apache-2.0 is the strategically smarter permissive pick because it carries an express patent grant that MIT/BSD lack — worth having in patent-dense keyboard territory. <b>GPL-3.0</b> (HeliBoard, OpenBoard) would relicense your whole app; read them for approach only. And the subtle trap both the AOSP dictionaries and the popular frequency corpora share: the <i>code</i> can be permissive while the <i>data</i> isn't — AOSP's dictionaries are Lexiteria's, wordfreq/FrequencyWords data is CC-BY-SA. Build your data from SCOWL/ESDB and Google-Books-Ngram instead.<span class="cite">2,9,16,17,19</span> <i>Not legal advice — the GPL-linking question is untested in court; get an attorney's sign-off before a commercial launch.</i></p>
+      </div>
+    </section>
+
+    <!-- 06 SOURCES -->
+    <section id="sources">
+      <div class="sec-head"><span class="sec-num">06</span><h2 class="sec-title">Sources</h2></div>
+      <div class="sources">
+        <div class="src"><span class="si">[1]</span><span class="st"><a href="https://android.googlesource.com/platform/packages/inputmethods/LatinIME">AOSP LatinIME (engine tree)</a><span class="note">Apache-2.0 engine: BinaryDictionary, ProximityInfo, n-gram, InputLogic.</span></span><span class="smeta">recent<br><span class="badge b-both">BOTH</span></span></div>
+        <div class="src"><span class="si">[2]</span><span class="st"><a href="https://android.googlesource.com/platform/packages/inputmethods/LatinIME/+/refs/heads/main/NOTICE">AOSP LatinIME NOTICE file</a><span class="note">Dictionaries © Lexiteria LLC, "used by permission" — data not freely redistributable.</span></span><span class="smeta">undated<br><span class="badge b-cx">CODEX</span></span></div>
+        <div class="src"><span class="si">[3]</span><span class="st"><a href="https://github.com/HeliBorg/HeliBoard">HeliBoard (Helium314/HeliBoard)</a><span class="note">v3.9, 2026-03-29, GPL-3.0 — closest live behavioral reference; ship as reference only.</span></span><span class="smeta">2026-03-29<br><span class="badge b-both">BOTH</span></span></div>
+        <div class="src"><span class="si">[4]</span><span class="st"><a href="https://github.com/AnySoftKeyboard/AnySoftKeyboard">AnySoftKeyboard</a><span class="note">v1.13-r1, 2026-02-08, Apache-2.0, Java — next-word prediction, active.</span></span><span class="smeta">2026-02-08<br><span class="badge b-both">BOTH</span></span></div>
+        <div class="src"><span class="si">[5]</span><span class="st"><a href="https://github.com/rxp90/jsymspell">JSymSpell</a><span class="note">v1.1.4, 2026-05-17, MIT — the only genuine Maven Central drop-in for correction.</span></span><span class="smeta">2026-05-17<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src stale"><span class="si">[6]</span><span class="st"><a href="https://github.com/MighTguY/customized-symspell">customized-symspell</a><span class="note">MIT — weighted Damerau-Levenshtein + QWERTY keyboard-distance weighting.</span></span><span class="smeta">2020-12-15<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[7]</span><span class="st"><a href="https://github.com/florisboard/florisboard">FlorisBoard</a><span class="note">v0.5.2, 2025-11-28, Apache-2.0 — word suggestions not shipped (v0.6 goal).</span></span><span class="smeta">2025-11-28<br><span class="badge b-both">BOTH</span></span></div>
+        <div class="src stale"><span class="si">[8]</span><span class="st"><a href="https://github.com/openboard-team/openboard">OpenBoard</a><span class="note">Archived 2022-12-17, GPL-3.0 — dead; superseded by HeliBoard.</span></span><span class="smeta">2022-12-17<br><span class="badge b-both">BOTH</span></span></div>
+        <div class="src"><span class="si">[9]</span><span class="st"><a href="https://wordlist.aspell.net/">SCOWL / ESDB (+ en-wl/wordlist)</a><span class="note">Permissive MIT-like English lexicon — the safe base wordlist.</span></span><span class="smeta">undated<br><span class="badge b-both">BOTH</span></span></div>
+        <div class="src"><span class="si">[10]</span><span class="st"><a href="https://github.com/wolfgarbe/SymSpell">SymSpell (Wolf Garbe)</a><span class="note">Symmetric-Delete algorithm — efficient candidate generation.</span></span><span class="smeta">2012 · evergreen<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[11]</span><span class="st"><a href="https://norvig.com/spell-correct.html">Norvig — How to Write a Spelling Corrector</a><span class="note">Noisy-channel model; big.txt provenance caveat (Wiktionary CC-BY-SA).</span></span><span class="smeta">2007 · evergreen<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[12]</span><span class="st"><a href="https://arxiv.org/abs/1704.03987">Google — Mobile Keyboard FST Decoder</a><span class="note">Gaussian touch model + LM + confidence gate — the reference architecture.</span></span><span class="smeta">2017-04-13<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[13]</span><span class="st"><a href="https://developer.android.com/reference/android/inputmethodservice/InputMethodService">Android InputMethodService docs</a><span class="note">commitText / setComposingText / onUpdateSelection semantics.</span></span><span class="smeta">current<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[14]</span><span class="st"><a href="https://developer.android.com/reference/android/view/textservice/SpellCheckerSession">Android SpellCheckerSession docs</a><span class="note">Async, third-party-dependent — why it can't be the primary engine.</span></span><span class="smeta">current<br><span class="badge b-both">BOTH</span></span></div>
+        <div class="src"><span class="si">[15]</span><span class="st"><a href="https://codeberg.org/Helium314/aosp-dictionaries">Helium314/aosp-dictionaries</a><span class="note">Prebuilt AOSP DAWG dicts + tooling; per-dict source license varies (some GPLv2).</span></span><span class="smeta">recent<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[16]</span><span class="st"><a href="https://www.gnu.org/licenses/gpl-faq.html">FSF — GPL FAQ</a><span class="note">"Based on the work" / conveying obligations — why GPL infects the whole APK.</span></span><span class="smeta">current<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[17]</span><span class="st"><a href="https://www.apache.org/licenses/GPL-compatibility">Apache — Apache-2.0 / GPL compatibility</a><span class="note">Why the ASF treats GPL linking as a derivative-work problem.</span></span><span class="smeta">undated<br><span class="badge b-cx">CODEX</span></span></div>
+        <div class="src"><span class="si">[18]</span><span class="st"><a href="https://wiki.qt.io/Licensing-talk-about-mobile-platforms">Qt — LGPL on mobile</a><span class="note">The LGPL relink requirement collides with APK signing.</span></span><span class="smeta">undated<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[19]</span><span class="st"><a href="https://github.com/rspeer/wordfreq">wordfreq (rspeer)</a><span class="note">Code Apache-2.0 but data is CC-BY-SA 4.0; sunset ~2021 — data ShareAlike trap.</span></span><span class="smeta">2024<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[20]</span><span class="st"><a href="https://github.com/hermitdave/FrequencyWords">hermitdave/FrequencyWords</a><span class="note">LICENSE file says MIT but README declares data CC-BY-SA 3.0 — treat data as ShareAlike.</span></span><span class="smeta">undated<br><span class="badge b-c">CLAUDE</span></span></div>
+        <div class="src"><span class="si">[21]</span><span class="st"><a href="https://mjtsai.com/blog/2023/12/22/ios-17-autocorrect/">iOS 17 autocorrect (transformer LM)</a><span class="note">Context: Apple moved to an on-device transformer LM — out of scope for a small IME.</span></span><span class="smeta">2023<br><span class="badge b-c">CLAUDE</span></span></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== RIGHT RAIL ===== -->
+  <aside class="rail rail-right">
+    <div class="stick">
+      <h6>The One-Sentence Answer</h6>
+      <p class="ans">No single permissive package does all four Apple behaviors — layer JSymSpell (MIT) + a next-word layer + smart rules, or vendor the AOSP LatinIME engine (Apache-2.0). Never bundle GPL keyboards.</p>
+      <h6>Freshness</h6>
+      <p class="meta">Researched 2026-07-04<br>Freshest source 2026-05-17<br>High confidence · primary-verified</p>
+      <h6>Contents</h6>
+      <ul class="toc">
+        <li><a href="#why"><span class="tn">01</span>Why this answer</a></li>
+        <li><a href="#packages"><span class="tn">02</span>The packages, ranked</a></li>
+        <li><a href="#agree"><span class="tn">03</span>Where they converged</a></li>
+        <li><a href="#dispute"><span class="tn">04</span>Where they differed</a></li>
+        <li><a href="#build"><span class="tn">05</span>How to build it</a></li>
+        <li><a href="#sources"><span class="tn">06</span>Sources</a></li>
+      </ul>
+    </div>
+  </aside>
+
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="bar">
+    <div class="foot-grid">
+      <div>
+        <h5>Methodology</h5>
+        <p>Two independent reasoners researched the same question in parallel: <b>Claude</b> (fanned out to three focused subagents — libraries, architecture, license &amp; data) and <b>Codex CLI</b> (one holistic broad-mode pass that verified licenses and behavior at the source level, reading HeliBoard's actual <code>Suggest.kt</code>, <code>BinaryDictionary.java</code>, and <code>InputLogic.java</code>). Repo activity was held to a 12-month freshness window; algorithm sources are evergreen. Findings were reconciled — one material factual disagreement (AOSP dictionary licensing) resolved on Codex's primary-source evidence; one emphasis difference resolved into a two-path recommendation. No standoff remained, so no second reconciliation round was run.</p>
+        <p style="margin-top:12px">Research conducted <b>2026-07-04 08:23</b> (local). Freshest supporting source: <b>2026-05-17</b>.</p>
+      </div>
+      <div>
+        <h5>Raw findings</h5>
+        <p><a href="search_results/synthesis.md">synthesis.md</a> — the reconciled answer<br>
+        <a href="search_results/claude.md">claude.md</a> — Claude's three-aspect pass<br>
+        <a href="search_results/codex.md">codex.md</a> — Codex's independent pass</p>
+      </div>
+    </div>
+    <div class="disc">Research synthesis, not legal advice. License conclusions reflect primary-source reading as of 2026-07-04; the GPL-linking derivative-work question is untested in court, and data-license reach (CC-BY-SA over derived tables) is arguable. Confirm the exact license text of any dictionary/frequency file before a commercial ship, and get an IP attorney's sign-off.</div>
+  </div>
+</footer>
+
+<script>
+  const prog=document.getElementById('prog');
+  const onScroll=()=>{const h=document.documentElement;const max=h.scrollHeight-h.clientHeight;prog.style.width=(max>0?(h.scrollTop/max)*100:0)+'%'};
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
+  document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>

@@ -27,12 +27,23 @@ final class DeepgramClient {
     }
 
     static String transcribe(Context context, File audioFile) throws Exception {
+        return transcribe(context, audioFile, DictationLanguage.AUTO);
+    }
+
+    static String transcribe(Context context, File audioFile, DictationLanguage language) throws Exception {
         String apiKey = requiredApiKey(context);
         String model = nonEmpty(Prefs.transcriptionModel(context), Prefs.defaultTranscriptionModel(Prefs.PROVIDER_DEEPGRAM));
         String url = LISTEN_URL
                 + "?model=" + URLEncoder.encode(model, "UTF-8")
                 + "&smart_format=true"
                 + "&filler_words=false";
+        // nova-3 defaults to English. Its multilingual "multi" code does not
+        // cover Mandarin, so Chinese has to be requested explicitly and cannot
+        // be combined with English on this provider.
+        String deepgramLanguage = language.deepgramLanguage();
+        if (!deepgramLanguage.isEmpty()) {
+            url += "&language=" + URLEncoder.encode(deepgramLanguage, "UTF-8");
+        }
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         connection.setRequestMethod("POST");
         connection.setDoOutput(true);

@@ -3,6 +3,7 @@
 app/build/
 local.properties
 .env.local
+.voiceflow-private.json
 voice_keyboard_*.png
 window.xml
 .idea/

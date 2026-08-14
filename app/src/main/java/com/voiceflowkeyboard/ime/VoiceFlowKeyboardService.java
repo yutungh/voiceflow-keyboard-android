@@ -15,6 +15,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
 import android.inputmethodservice.InputMethodService;
+import android.media.AudioManager;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -67,7 +68,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class VoiceFlowKeyboardService extends InputMethodService {
-    private static final int KEY_HEIGHT_DP = 48;
     private static final int KEY_VISUAL_GAP_DP = 3;
     private static final int SPELL_CHECK_DELAY_MS = 120;
     private static final int SHIFT_DOUBLE_TAP_MS = 350;
@@ -85,6 +85,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private LinearLayout voiceStyleOverlay;
     private LinearLayout chipStrip;
     private HorizontalScrollView chipScroller;
+    private HorizontalScrollView voiceStyleScroller;
     private TextView statusText;
     private ImageButton translationButton;
     private ImageButton createButton;
@@ -93,7 +94,8 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private TextView cancelRecordingButton;
     private ImageButton topHistoryButton;
     private TextView shiftButton;
-    private TextView spaceButton;
+    /** Space bars in the current layout: one normally, two when split. */
+    private final List<TextView> spaceButtons = new ArrayList<>();
     private boolean recording;
     private boolean processing;
     private boolean translationCapture;
@@ -105,6 +107,9 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private boolean symbolsMode;
     private boolean symbolsMoreMode;
     private boolean historyMode;
+    private InputMode inputMode = InputMode.ENGLISH;
+    private PinyinEngine pinyinEngine;
+    private PinyinSession pinyinSession;
     private boolean deleteHeld;
     private boolean spaceCursorMode;
     private boolean offlineRecordingSession;
@@ -118,8 +123,10 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private boolean rootSwipeTracking;
     private boolean rootSwipeStartedOnSpace;
     private boolean rootSwipeStartedOnExpressionSlider;
+    private boolean rootSwipeStartedOnVoiceStyleScroller;
     private boolean panelAnimating;
     private boolean retoneMode;
+    private boolean funStylesExpanded;
     private long deleteHoldStartMs;
     private long lastShiftTapMs;
     private String selectedPreset;
@@ -168,8 +175,16 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     @Override
     public View onCreateInputView() {
         colors = Palette.from(this);
+        // The framework calls this again after a configuration change, so this
+        // is the one place geometry needs to be derived.
+        metrics = KeyboardMetrics.from(getResources().getConfiguration());
         selectedPreset = Prefs.activePreset(this);
         selectedExpression = Prefs.expressionForPreset(this, selectedPreset);
+        if (!chineseAvailable() && inputMode.isChinese()) {
+            // Chinese was switched off in Settings while the keyboard was away.
+            inputMode = InputMode.ENGLISH;
+            pinyinSession = null;
+        }
         LinearLayout root = new SwipeRootLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(5), dp(5), dp(5), dp(6));
@@ -191,7 +206,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         ));
         root.addView(keyboardSurface, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(KEY_HEIGHT_DP * 4)
+                dp(metrics.keyHeightDp * 4)
         ));
         showIdleChips();
         updateAutoCapitalization();
@@ -209,6 +224,8 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
         super.onStartInput(attribute, restarting);
+        cancelRecordingIfKeyboardShouldReset();
+        settlePinyin(PinyinSession.SettleReason.EDITOR_GONE);
         clearAutoCorrection();
         clearLastAutoCorrection();
         clearLastVoiceInsertion();
@@ -218,15 +235,48 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         if (historyMode) {
             hideHistoryPanel();
         }
-        updateAutoCapitalization();
+        restoreKeyboardForActiveInput();
+    }
+
+    @Override
+    public void onStartInputView(EditorInfo info, boolean restarting) {
+        super.onStartInputView(info, restarting);
+        restoreKeyboardForActiveInput();
+    }
+
+    @Override
+    public void onWindowShown() {
+        super.onWindowShown();
+        restoreKeyboardForActiveInput();
+    }
+
+    private void restoreKeyboardForActiveInput() {
+        if (recording) {
+            showCaptureRecordingState();
+        } else if (!processing) {
+            resetToRegularKeyboard();
+        }
     }
 
     @Override
     public void onFinishInput() {
+        cancelRecordingIfKeyboardShouldReset();
+        // The editor is going away: drop the buffer without writing anything.
+        // Committing here risks landing text in whatever field comes next.
+        settlePinyin(PinyinSession.SettleReason.EDITOR_GONE);
         clearAutoCorrection();
         clearLastAutoCorrection();
         clearLastVoiceInsertion();
         super.onFinishInput();
+    }
+
+    @Override
+    public void onWindowHidden() {
+        cancelRecordingIfKeyboardShouldReset();
+        if (!recording && !processing) {
+            resetToRegularKeyboard();
+        }
+        super.onWindowHidden();
     }
 
     @Override
@@ -246,6 +296,19 @@ public class VoiceFlowKeyboardService extends InputMethodService {
                 candidatesStart,
                 candidatesEnd
         );
+        // The cursor left the composing span, so the buffer no longer describes
+        // where the text would land. Leave what is on screen and stop composing.
+        //
+        // Deliberately conservative: a missing composing region (candidatesStart
+        // < 0, which some editors and WebViews always report) is NOT treated as
+        // having moved away. Doing so would settle on our own setComposingText
+        // callback and kill the composition on every single keystroke. A stale
+        // buffer in such an editor is cleaned up by the other settle points.
+        if (composingPinyin()
+                && candidatesStart >= 0
+                && (newSelStart < candidatesStart || newSelEnd > candidatesEnd)) {
+            settlePinyin(PinyinSession.SettleReason.CURSOR_MOVED);
+        }
         if (!lastVoiceRawTranscript.isEmpty()
                 && lastVoiceSelectionEnd >= 0
                 && (newSelStart != lastVoiceSelectionEnd || newSelEnd != lastVoiceSelectionEnd)) {
@@ -255,6 +318,34 @@ public class VoiceFlowKeyboardService extends InputMethodService {
 
     private boolean handleSwipe(View view, MotionEvent event) {
         return false;
+    }
+
+    private void cancelRecordingIfKeyboardShouldReset() {
+        if (recording && !processing && Prefs.cancelRecordingWhenHidden(this)) {
+            cancelRecording();
+        }
+    }
+
+    private void resetToRegularKeyboard() {
+        if (keyboardPanel == null || recording || processing) {
+            return;
+        }
+        retoneMode = false;
+        historyMode = false;
+        symbolsMode = false;
+        symbolsMoreMode = false;
+        shift = false;
+        capsLock = false;
+        lastShiftTapMs = 0;
+        hideVoiceStyleOverlay();
+        setKeyboardLocked(false);
+        setRetoneTopControls(false);
+        setHistoryControlsActive(false);
+        populateKeyboardPanel(keyboardPanel);
+        hideChipStrip();
+        showIdleChips();
+        updateAutoCapitalization();
+        setStatus("Ready");
     }
 
     private boolean isHorizontalSwipe(float deltaX, float deltaY) {
@@ -268,8 +359,13 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             rootDownY = event.getRawY();
             rootSwipeConsumed = false;
             rootSwipeTracking = false;
-            rootSwipeStartedOnSpace = isRawPointInside(spaceButton, rootDownX, rootDownY);
+            rootSwipeStartedOnSpace = isRawPointInsideAny(spaceButtons, rootDownX, rootDownY);
             rootSwipeStartedOnExpressionSlider = isRawPointInside(expressionSlider, rootDownX, rootDownY);
+            rootSwipeStartedOnVoiceStyleScroller = isRawPointInside(
+                    voiceStyleScroller,
+                    rootDownX,
+                    rootDownY
+            );
             return false;
         }
         if (action == MotionEvent.ACTION_CANCEL) {
@@ -287,6 +383,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         }
         if (rootSwipeStartedOnSpace
                 || rootSwipeStartedOnExpressionSlider
+                || rootSwipeStartedOnVoiceStyleScroller
                 || (action != MotionEvent.ACTION_MOVE && action != MotionEvent.ACTION_UP)) {
             return false;
         }
@@ -379,6 +476,15 @@ public class VoiceFlowKeyboardService extends InputMethodService {
                 && rawY <= location[1] + view.getHeight();
     }
 
+    private boolean isRawPointInsideAny(List<? extends View> views, float rawX, float rawY) {
+        for (View view : views) {
+            if (isRawPointInside(view, rawX, rawY)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private LinearLayout buildStrip() {
         LinearLayout outer = new LinearLayout(this);
         outer.setOrientation(LinearLayout.VERTICAL);
@@ -398,7 +504,16 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         statusText.setTextColor(colors.text);
         statusText.setTextSize(14);
         statusText.setSingleLine(true);
-        statusText.setEllipsize(TextUtils.TruncateAt.END);
+        statusText.setEllipsize(TextUtils.TruncateAt.MARQUEE);
+        statusText.setMarqueeRepeatLimit(2);
+        statusText.setHorizontallyScrolling(true);
+        statusText.setSelected(true);
+        statusText.setAutoSizeTextTypeUniformWithConfiguration(
+                11,
+                14,
+                1,
+                android.util.TypedValue.COMPLEX_UNIT_SP
+        );
         statusText.setGravity(Gravity.CENTER_VERTICAL);
         statusText.setPadding(dp(6), 0, dp(10), 0);
         statusText.setBackgroundColor(Color.TRANSPARENT);
@@ -504,7 +619,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         keyButtons.clear();
         letterButtons.clear();
         shiftButton = null;
-        spaceButton = null;
+        spaceButtons.clear();
         if (symbolsMode) {
             if (symbolsMoreMode) {
                 panel.addView(keyRow(new String[]{"[", "]", "{", "}", "#", "%", "^", "*", "+", "="}));
@@ -519,12 +634,22 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             String[] thirdRow = symbolsMoreMode
                     ? new String[]{"`", "…", "—", "–", "¿", "¡", "°"}
                     : new String[]{".", ",", "?", "!", "'", "_", "+"};
-            for (String value : thirdRow) {
-                third.addView(keyButton(value, 1f, v -> commitKey(((TextView) v).getText().toString())));
+            int symbolSplit = splitIndexFor(KeyboardGeometry.Row.SYMBOLS_THIRD, thirdRow.length);
+            for (int i = 0; i < thirdRow.length; i++) {
+                if (i == symbolSplit) {
+                    third.addView(splitSpacer());
+                }
+                third.addView(keyButton(thirdRow[i], 1f, v -> commitKey(((TextView) v).getText().toString())));
             }
             third.addView(deleteKey());
             panel.addView(third);
             panel.addView(bottomRow("ABC"));
+            return;
+        }
+
+        if (inputMode.isKeypad()) {
+            addKeypadRows(panel);
+            panel.addView(bottomRow("?123"));
             return;
         }
 
@@ -535,8 +660,13 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         third.setOrientation(LinearLayout.HORIZONTAL);
         shiftButton = keyButton("shift", 1.35f, v -> toggleShift(), true);
         third.addView(shiftButton);
-        for (char c : "zxcvbnm".toCharArray()) {
-            third.addView(letterKeyButton(String.valueOf(c), 1f));
+        String bottomLetters = "zxcvbnm";
+        int bottomSplit = splitIndexFor(KeyboardGeometry.Row.BOTTOM_LETTERS, bottomLetters.length());
+        for (int i = 0; i < bottomLetters.length(); i++) {
+            if (i == bottomSplit) {
+                third.addView(splitSpacer());
+            }
+            third.addView(letterKeyButton(String.valueOf(bottomLetters.charAt(i)), 1f));
         }
         third.addView(deleteKey());
         panel.addView(third);
@@ -562,14 +692,14 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         keyButtons.clear();
         letterButtons.clear();
         shiftButton = null;
-        spaceButton = null;
+        spaceButtons.clear();
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(false);
         scroll.setOnTouchListener(this::handleSwipe);
         scroll.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(KEY_HEIGHT_DP * 4)
+                dp(metrics.keyHeightDp * 4)
         ));
 
         LinearLayout content = new LinearLayout(this);
@@ -584,7 +714,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             empty.setBackground(keyVisualBackground(colors.key, false));
             content.addView(empty, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
-                    dp(KEY_HEIGHT_DP * 4)
+                    dp(metrics.keyHeightDp * 4)
             ));
         } else {
             for (VoiceHistoryItem item : history) {
@@ -929,9 +1059,28 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         bottom.setGravity(Gravity.CENTER_VERTICAL);
         String normalizedMode = modeLabel.replace("?", "");
         bottom.addView(keyButton(normalizedMode, 1.4f, v -> toggleSymbolsMode(), true));
-        bottom.addView(spaceKey(symbolsMode ? 5.45f : 5.7f));
+        boolean showLanguageKey = chineseAvailable();
+        if (showLanguageKey) {
+            // Sits immediately right of 123; the space bar gives up the width.
+            bottom.addView(languageKey());
+        }
+        float spaceWeight = symbolsMode ? 5.45f : 5.7f;
+        if (showLanguageKey) {
+            spaceWeight -= 1.15f;
+        }
+        if (metrics.split) {
+            // A single space bar spanning the gap would be unreachable in the
+            // middle and would visually bridge the two halves. Give each thumb
+            // its own; both carry the same tap and cursor-drag behaviour.
+            bottom.addView(spaceKey(spaceWeight / 2f));
+            bottom.addView(splitSpacer());
+            bottom.addView(spaceKey(spaceWeight / 2f));
+        } else {
+            bottom.addView(spaceKey(spaceWeight));
+        }
         if (!symbolsMode) {
-            bottom.addView(keyButton(".", 0.9f, v -> commitSeparator(".")));
+            String stop = inputMode.isChinese() ? "。" : ".";
+            bottom.addView(keyButton(stop, 0.9f, v -> commitSeparator(stop)));
         }
         bottom.addView(keyButton("return", 1.65f, v -> sendEnter(), true));
         return bottom;
@@ -940,15 +1089,22 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private LinearLayout letterMiddleRow() {
         LinearLayout outer = new LinearLayout(this);
         outer.setOrientation(LinearLayout.HORIZONTAL);
-        outer.addView(edgeDeadZone(10));
-        outer.addView(edgeHitZone("a", 14));
-        outer.addView(keyRow("asdfghjkl"), new LinearLayout.LayoutParams(
+        // The edge dead zones exist to stop fat-finger misses at the screen
+        // border. Split apart, the halves are nowhere near the border and the
+        // padding just eats reachable width, so drop it.
+        if (!metrics.split) {
+            outer.addView(edgeDeadZone(10));
+            outer.addView(edgeHitZone("a", 14));
+        }
+        outer.addView(keyRow("asdfghjkl", KeyboardGeometry.Row.MIDDLE), new LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 1f
         ));
-        outer.addView(edgeHitZone("l", 14));
-        outer.addView(edgeDeadZone(10));
+        if (!metrics.split) {
+            outer.addView(edgeHitZone("l", 14));
+            outer.addView(edgeDeadZone(10));
+        }
         return outer;
     }
 
@@ -956,7 +1112,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         View view = new View(this);
         view.setLayoutParams(new LinearLayout.LayoutParams(
                 dp(widthDp),
-                dp(KEY_HEIGHT_DP)
+                keyHeightPx()
         ));
         return view;
     }
@@ -970,16 +1126,24 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         });
         view.setLayoutParams(new LinearLayout.LayoutParams(
                 dp(widthDp),
-                dp(KEY_HEIGHT_DP)
+                keyHeightPx()
         ));
         return view;
     }
 
     private LinearLayout keyRow(String chars) {
+        return keyRow(chars, KeyboardGeometry.Row.TOP);
+    }
+
+    private LinearLayout keyRow(String chars, KeyboardGeometry.Row rowId) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        for (char c : chars.toCharArray()) {
-            row.addView(letterKeyButton(String.valueOf(c), 1f));
+        int splitAt = splitIndexFor(rowId, chars.length());
+        for (int i = 0; i < chars.length(); i++) {
+            if (i == splitAt) {
+                row.addView(splitSpacer());
+            }
+            row.addView(letterKeyButton(String.valueOf(chars.charAt(i)), 1f));
         }
         return row;
     }
@@ -987,13 +1151,22 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private LinearLayout keyRow(String[] labels) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        for (String label : labels) {
-            row.addView(keyButton(label, 1f, v -> commitKey(((TextView) v).getText().toString())));
+        int splitAt = splitIndexFor(KeyboardGeometry.Row.SYMBOLS, labels.length);
+        for (int i = 0; i < labels.length; i++) {
+            if (i == splitAt) {
+                row.addView(splitSpacer());
+            }
+            row.addView(keyButton(labels[i], 1f, v -> commitKey(((TextView) v).getText().toString())));
         }
         return row;
     }
 
     private void showIdleChips() {
+        // Candidates outrank everything: while composing, the strip is the only
+        // way to choose a character.
+        if (showPinyinCandidates()) {
+            return;
+        }
         if (showRetoneChip()) {
             return;
         }
@@ -1084,6 +1257,9 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             return;
         }
         boolean entering = voiceStyleOverlay.getVisibility() != View.VISIBLE;
+        if (entering) {
+            funStylesExpanded = false;
+        }
         voiceStyleOverlay.animate().cancel();
         voiceStyleOverlay.removeAllViews();
         voiceStyleOverlay.setOrientation(LinearLayout.VERTICAL);
@@ -1123,27 +1299,68 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         ));
 
         List<PromptProfile> styles = Prefs.promptProfiles(this);
+        List<PromptProfile> regularStyles = new ArrayList<>();
+        List<PromptProfile> funStyles = new ArrayList<>();
+        for (PromptProfile style : styles) {
+            if (Prefs.isFunVoiceStyle(style.id)) {
+                funStyles.add(style);
+            } else {
+                regularStyles.add(style);
+            }
+        }
         HorizontalScrollView scroller = new HorizontalScrollView(this);
+        voiceStyleScroller = scroller;
         scroller.setHorizontalScrollBarEnabled(false);
         scroller.setFillViewport(false);
+        scroller.setSmoothScrollingEnabled(true);
+        scroller.setHorizontalFadingEdgeEnabled(true);
+        scroller.setFadingEdgeLength(dp(24));
+        scroller.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
+        scroller.setContentDescription("Swipe left or right to browse voice styles");
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(1), 0, dp(5), 0);
-        for (PromptProfile style : styles) {
-            TextView button = voiceStyleButton(style);
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+        TextView selectedButton = null;
+        for (PromptProfile style : regularStyles) {
+            TextView button = addVoiceStyleButton(row, style);
+            if (style.id.equals(selectedPreset)) {
+                selectedButton = button;
+            }
+        }
+        if (!funStyles.isEmpty()) {
+            TextView toggle = funStylesToggleButton(funStyles);
+            LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     dp(40)
             );
-            params.setMargins(dp(2), dp(2), dp(2), dp(2));
-            row.addView(button, params);
+            toggleParams.setMargins(dp(8), dp(2), dp(2), dp(2));
+            row.addView(toggle, toggleParams);
+            if (!funStylesExpanded && Prefs.isFunVoiceStyle(selectedPreset)) {
+                selectedButton = toggle;
+            }
+            if (funStylesExpanded) {
+                for (PromptProfile style : funStyles) {
+                    TextView button = addVoiceStyleButton(row, style);
+                    if (style.id.equals(selectedPreset)) {
+                        selectedButton = button;
+                    }
+                }
+            }
         }
         scroller.addView(row);
         voiceStyleOverlay.addView(scroller, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(44)
         ));
+        TextView buttonToReveal = selectedButton;
+        if (buttonToReveal != null) {
+            scroller.post(() -> {
+                int centeredX = buttonToReveal.getLeft()
+                        - Math.max(0, (scroller.getWidth() - buttonToReveal.getWidth()) / 2);
+                scroller.smoothScrollTo(Math.max(0, centeredX), 0);
+            });
+        }
 
         View divider = new View(this);
         divider.setBackgroundColor(colors.stroke);
@@ -1190,6 +1407,54 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             Prefs.setActivePreset(this, selectedPreset);
             showVoiceStyleOverlay();
             setStatus(captureStyleStatus(retoneMode ? "Retone" : "Recording"));
+        });
+        return button;
+    }
+
+    private TextView addVoiceStyleButton(LinearLayout row, PromptProfile style) {
+        TextView button = voiceStyleButton(style);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dp(40)
+        );
+        params.setMargins(dp(2), dp(2), dp(2), dp(2));
+        row.addView(button, params);
+        return button;
+    }
+
+    private TextView funStylesToggleButton(List<PromptProfile> funStyles) {
+        PromptProfile selectedFunStyle = null;
+        for (PromptProfile style : funStyles) {
+            if (style.id.equals(selectedPreset)) {
+                selectedFunStyle = style;
+                break;
+            }
+        }
+        boolean selectedAndCollapsed = selectedFunStyle != null && !funStylesExpanded;
+        String title = selectedAndCollapsed
+                ? selectedFunStyle.displayName()
+                : "🎭 Fun (" + funStyles.size() + ")";
+        TextView button = historyText(title + (funStylesExpanded ? "  ◂" : "  ▸"), 12, true);
+        button.setGravity(Gravity.CENTER);
+        button.setSingleLine(true);
+        button.setEllipsize(TextUtils.TruncateAt.END);
+        button.setPadding(dp(12), 0, dp(12), 0);
+        button.setMinWidth(dp(92));
+        button.setMaxWidth(dp(180));
+        button.setTextColor(selectedAndCollapsed ? colors.onAccent : colors.text);
+        button.setBackground(keyBackground(
+                selectedAndCollapsed ? colors.accent : colors.keyAlt,
+                selectedAndCollapsed
+        ));
+        button.setContentDescription((funStylesExpanded ? "Collapse" : "Expand")
+                + " fun voice styles, " + funStyles.size() + " available");
+        button.setOnClickListener(v -> {
+            if ((!recording && !retoneMode) || processing || instructionCapture) {
+                return;
+            }
+            haptic(v);
+            funStylesExpanded = !funStylesExpanded;
+            showVoiceStyleOverlay();
         });
         return button;
     }
@@ -1282,6 +1547,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         voiceStyleOverlay.setVisibility(View.GONE);
         voiceStyleOverlay.removeAllViews();
         voiceStyleOverlay.setAlpha(1f);
+        voiceStyleScroller = null;
         expressionSlider = null;
     }
 
@@ -1496,7 +1762,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             listener.onClick(v);
         });
         view.setOnTouchListener(this::handleSwipe);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(KEY_HEIGHT_DP), weight);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, keyHeightPx(), weight);
         params.setMargins(0, 0, 0, 0);
         view.setLayoutParams(params);
         keyButtons.add(view);
@@ -1517,7 +1783,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private TextView spaceKey(float weight) {
         TextView key = keyButton("space", weight, v -> {
         });
-        spaceButton = key;
+        spaceButtons.add(key);
         key.setOnTouchListener(this::handleSpaceTouch);
         return key;
     }
@@ -1625,7 +1891,13 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             boolean wasCursorMode = spaceCursorMode;
             stopSpaceCursorTracking();
             if (!wasCursorMode) {
-                commitSeparator(" ");
+                if (composingPinyin()) {
+                    // Standard pinyin behaviour: space accepts the top candidate
+                    // and does not insert a space of its own.
+                    settlePinyin(PinyinSession.SettleReason.ACCEPT_TOP);
+                } else {
+                    commitSeparator(" ");
+                }
             }
             return true;
         }
@@ -1703,6 +1975,11 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         if (recording || processing) {
             return;
         }
+        // In Chinese mode the letter and keypad keys feed the composer instead
+        // of the editor. Symbols mode is unaffected and still types literally.
+        if (!symbolsMode && handleChineseKey(value)) {
+            return;
+        }
         boolean letterKey = !symbolsMode && value.length() == 1 && Character.isLetter(value.charAt(0));
         String text = symbolsMode ? value : (isShiftActive() ? value.toUpperCase(Locale.US) : value.toLowerCase(Locale.US));
         if (isSeparator(text)) {
@@ -1728,6 +2005,14 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             return;
         }
         lastShiftTapMs = 0;
+        if (inputMode.isChinese()) {
+            // Take the best reading first, then emit Chinese punctuation. None of
+            // the English autocorrect or phrase-replacement machinery applies.
+            settlePinyin(PinyinSession.SettleReason.ACCEPT_TOP);
+            commitText(fullWidthPunctuation(separator));
+            showIdleChips();
+            return;
+        }
         boolean corrected = applyPendingAutoCorrection(true);
         applyRecentPhraseReplacement();
         commitText(separator);
@@ -2111,13 +2396,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     }
 
     private String applyPhraseReplacements(String text) {
-        String result = text;
-        for (PhraseReplacement replacement : Prefs.allPhraseReplacements(this)) {
-            Pattern pattern = Pattern.compile("(?i)(?<![A-Za-z])" + Pattern.quote(replacement.from) + "(?![A-Za-z])");
-            Matcher matcher = pattern.matcher(result);
-            result = matcher.replaceAll(Matcher.quoteReplacement(replacement.to));
-        }
-        return result;
+        return PersonalVocabulary.applyReplacements(text, Prefs.allPhraseReplacements(this));
     }
 
     private String removeShortTrailingPeriod(String text) {
@@ -2167,6 +2446,20 @@ public class VoiceFlowKeyboardService extends InputMethodService {
 
     private void deleteOne() {
         if (recording || processing) {
+            return;
+        }
+        // While composing, backspace shortens the pinyin buffer rather than
+        // deleting text the user has already committed.
+        if (composingPinyin()) {
+            pinyinSession.backspace();
+            if (composingPinyin()) {
+                refreshComposingText();
+            } else {
+                // The buffer is empty, so settle() would report NOTHING and the
+                // editor would keep an orphaned composing span. Clear it here.
+                clearComposingRegion();
+                showIdleChips();
+            }
             return;
         }
         InputConnection connection = getCurrentInputConnection();
@@ -2632,6 +2925,12 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     }
 
     private boolean shouldTypingAssistance() {
+        // English spelling help has nothing useful to say about pinyin, and
+        // auto-capitalisation would fight the composer. Off for the whole of
+        // Chinese mode, not just while a buffer is active.
+        if (inputMode.isChinese()) {
+            return false;
+        }
         EditorInfo info = getCurrentInputEditorInfo();
         if (info == null) {
             return true;
@@ -2756,29 +3055,24 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             return;
         }
         String text = before.toString();
-        for (PhraseReplacement replacement : Prefs.allPhraseReplacements(this)) {
-            if (endsWithPhrase(text, replacement.from)) {
-                connection.deleteSurroundingText(replacement.from.length(), 0);
-                connection.commitText(replacement.to, 1);
-                return;
-            }
+        PersonalVocabulary.ReplacementMatch match = PersonalVocabulary.findReplacementAtEnd(
+                text,
+                Prefs.allPhraseReplacements(this)
+        );
+        if (match != null) {
+            connection.deleteSurroundingText(match.matchedLength, 0);
+            connection.commitText(match.replacement, 1);
         }
-    }
-
-    private boolean endsWithPhrase(String text, String phrase) {
-        if (text.length() < phrase.length()) {
-            return false;
-        }
-        String tail = text.substring(text.length() - phrase.length());
-        if (!tail.equalsIgnoreCase(phrase)) {
-            return false;
-        }
-        int boundary = text.length() - phrase.length() - 1;
-        return boundary < 0 || !isAutoCorrectWordCharacter(text.charAt(boundary));
     }
 
     private void sendEnter() {
         if (recording || processing) {
+            return;
+        }
+        // A half-typed reading must be resolved before the editor action fires,
+        // or the composing span can be submitted as raw latin.
+        if (composingPinyin()) {
+            settlePinyin(PinyinSession.SettleReason.ACCEPT_TOP);
             return;
         }
         InputConnection connection = getCurrentInputConnection();
@@ -2812,10 +3106,372 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         connection.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER));
     }
 
+    // ------------------------------------------------------------- Responsive
+
+    /**
+     * Screen-derived geometry for one build of the keyboard.
+     *
+     * <p>Recomputed in {@link #onCreateInputView()}, which the framework calls
+     * again after a configuration change: InputMethodService.onConfigurationChanged
+     * runs resetStateForNewConfiguration -> initViews, and initViews nulls the
+     * cached input view. That is also why the IME service must NOT declare
+     * android:configChanges — doing so marks those diffs handled and suppresses
+     * the rebuild.
+     */
+    private static final class KeyboardMetrics {
+        final int keyHeightDp;
+        final boolean split;
+        final int gutterDp;
+
+        private KeyboardMetrics(int keyHeightDp, boolean split, int gutterDp) {
+            this.keyHeightDp = keyHeightDp;
+            this.split = split;
+            this.gutterDp = gutterDp;
+        }
+
+        static KeyboardMetrics from(Configuration configuration) {
+            boolean landscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE;
+            boolean split = KeyboardGeometry.shouldSplit(configuration.smallestScreenWidthDp);
+            return new KeyboardMetrics(
+                    KeyboardGeometry.keyHeightDp(landscape),
+                    split,
+                    split ? KeyboardGeometry.gutterDp(configuration.screenWidthDp) : 0
+            );
+        }
+    }
+
+    private KeyboardMetrics metrics =
+            new KeyboardMetrics(KeyboardGeometry.KEY_HEIGHT_DP, false, 0);
+
+    private int keyHeightPx() {
+        return dp(metrics.keyHeightDp);
+    }
+
+    private int splitIndexFor(KeyboardGeometry.Row row, int keyCount) {
+        return KeyboardGeometry.splitIndex(row, keyCount, metrics.split);
+    }
+
+    /** The gap between the two halves. */
+    private View splitSpacer() {
+        View spacer = new View(this);
+        spacer.setLayoutParams(new LinearLayout.LayoutParams(dp(metrics.gutterDp), keyHeightPx()));
+        return spacer;
+    }
+
+    // ---------------------------------------------------------------- Chinese
+
+    /** Chinese punctuation for the keys that would otherwise emit ASCII. */
+    private static String fullWidthPunctuation(String ascii) {
+        switch (ascii) {
+            case ".":
+                return "。";
+            case ",":
+                return "，";
+            case "?":
+                return "？";
+            case "!":
+                return "！";
+            case ":":
+                return "：";
+            case ";":
+                return "；";
+            default:
+                return ascii;
+        }
+    }
+
+    private boolean chineseAvailable() {
+        return Prefs.chineseInputEnabled(this);
+    }
+
+    private boolean composingPinyin() {
+        return pinyinSession != null && pinyinSession.isComposing();
+    }
+
+    private PinyinEngine pinyinEngine() {
+        if (pinyinEngine == null) {
+            pinyinEngine = new PinyinEngine(getAssets(), executor, mainHandler, this::onPinyinEngineReady);
+        }
+        return pinyinEngine;
+    }
+
+    private void onPinyinEngineReady() {
+        if (!inputMode.isChinese()) {
+            return;
+        }
+        PinyinComposer composer = pinyinEngine().composerFor(inputMode);
+        if (composer == null) {
+            if (pinyinEngine().hasFailed()) {
+                setStatus("Chinese unavailable");
+            }
+            return;
+        }
+        if (pinyinSession == null) {
+            pinyinSession = new PinyinSession(composer);
+        } else {
+            pinyinSession.setComposer(composer);
+        }
+        setStatus(inputMode.isKeypad() ? "中文 九键" : "中文 全键");
+        showIdleChips();
+    }
+
+    /**
+     * Applies a settlement to the editor. Every path out of a composition goes
+     * through here so composing text can never be left behind.
+     */
+    private void applySettlement(PinyinSession.Settlement settlement) {
+        if (settlement == null || settlement.isNothing()) {
+            return;
+        }
+        if (settlement.action == PinyinSession.Action.CLEAR_STATE_ONLY) {
+            return;
+        }
+        InputConnection connection = getCurrentInputConnection();
+        if (connection == null) {
+            return;
+        }
+        switch (settlement.action) {
+            case COMMIT:
+                connection.commitText(settlement.text, 1);
+                break;
+            case KEEP_RAW:
+                connection.finishComposingText();
+                break;
+            case DISCARD:
+                connection.setComposingText("", 1);
+                connection.finishComposingText();
+                break;
+            default:
+                break;
+        }
+    }
+
+    /** Ends any composition in progress. Safe to call when nothing is composing. */
+    private void settlePinyin(PinyinSession.SettleReason reason) {
+        if (pinyinSession == null) {
+            return;
+        }
+        applySettlement(pinyinSession.settle(reason));
+        refreshComposingText();
+    }
+
+    /** Mirrors the raw buffer into the editor as underlined composing text. */
+    private void refreshComposingText() {
+        InputConnection connection = getCurrentInputConnection();
+        if (connection == null) {
+            return;
+        }
+        if (composingPinyin()) {
+            connection.setComposingText(pinyinSession.rawText(), 1);
+        }
+        showIdleChips();
+    }
+
+    /** Removes any composing span from the editor without committing it. */
+    private void clearComposingRegion() {
+        InputConnection connection = getCurrentInputConnection();
+        if (connection == null) {
+            return;
+        }
+        connection.setComposingText("", 1);
+        connection.finishComposingText();
+    }
+
+    /**
+     * Routes a typed character into the pinyin buffer.
+     *
+     * @return true when Chinese input consumed the key
+     */
+    private boolean handleChineseKey(String value) {
+        if (!inputMode.isChinese() || value.length() != 1) {
+            return false;
+        }
+        // Only take characters this layout can actually spell with. Anything
+        // else (punctuation reaching commitKey, say) falls through to the normal
+        // path rather than being swallowed into the buffer.
+        char typed = value.charAt(0);
+        boolean usable = inputMode.isKeypad()
+                ? (typed >= '2' && typed <= '9')
+                : Character.isLetter(typed) && typed < 128;
+        if (!usable) {
+            return false;
+        }
+        if (pinyinSession == null) {
+            // Engine still loading. Swallow the keystroke rather than emitting
+            // raw latin into a Chinese message.
+            pinyinEngine().prepare(inputMode);
+            setStatus("Loading Chinese…");
+            return true;
+        }
+        if (!pinyinSession.append(value.charAt(0))) {
+            return true;
+        }
+        refreshComposingText();
+        return true;
+    }
+
+    private void selectPinyinCandidate(int index) {
+        if (pinyinSession == null) {
+            return;
+        }
+        applySettlement(pinyinSession.select(index));
+        if (composingPinyin()) {
+            refreshComposingText();
+        } else {
+            InputConnection connection = getCurrentInputConnection();
+            if (connection != null) {
+                connection.finishComposingText();
+            }
+            showIdleChips();
+        }
+    }
+
+    /** Candidate strip. Highest priority: it owns the strip while composing. */
+    private boolean showPinyinCandidates() {
+        if (chipStrip == null || !composingPinyin() || recording || processing || historyMode) {
+            return false;
+        }
+        List<PinyinCandidate> candidates = pinyinSession.candidates();
+        chipStrip.removeAllViews();
+        showChipStrip();
+        if (candidates.isEmpty()) {
+            TextView raw = chip(pinyinSession.rawText(), v -> { });
+            raw.setTextColor(colors.status);
+            chipStrip.addView(raw);
+            return true;
+        }
+        for (int i = 0; i < candidates.size(); i++) {
+            final int index = i;
+            TextView candidate = chip(candidates.get(i).text, v -> selectPinyinCandidate(index));
+            if (i == 0) {
+                candidate.setTextColor(colors.onAccent);
+                candidate.setBackground(keyBackground(colors.accent, true));
+            }
+            chipStrip.addView(candidate);
+        }
+        return true;
+    }
+
+    private void setInputMode(InputMode next) {
+        if (next == inputMode) {
+            return;
+        }
+        settlePinyin(PinyinSession.SettleReason.MODE_CHANGED);
+        inputMode = next;
+        symbolsMode = false;
+        symbolsMoreMode = false;
+        shift = false;
+        autoShift = false;
+        capsLock = false;
+        lastShiftTapMs = 0;
+        clearAutoCorrection();
+        if (inputMode.isChinese()) {
+            Prefs.setChineseLayout(this, inputMode.prefsLayout());
+            pinyinEngine().prepare(inputMode);
+            PinyinComposer composer = pinyinEngine().composerFor(inputMode);
+            if (composer == null) {
+                pinyinSession = null;
+                setStatus("Loading Chinese…");
+            } else if (pinyinSession == null) {
+                pinyinSession = new PinyinSession(composer);
+            } else {
+                pinyinSession.setComposer(composer);
+            }
+        } else {
+            pinyinSession = null;
+            setStatus("Ready");
+        }
+        if (keyboardPanel != null) {
+            populateKeyboardPanel(keyboardPanel);
+        }
+        if (!inputMode.isChinese()) {
+            updateAutoCapitalization();
+        }
+        showIdleChips();
+    }
+
+    private void toggleLanguage() {
+        if (recording || processing) {
+            return;
+        }
+        setInputMode(inputMode.isChinese()
+                ? InputMode.ENGLISH
+                : InputMode.chineseFor(Prefs.chineseLayout(this)));
+    }
+
+    private void showChineseLayoutMenu(View anchor) {
+        if (recording || processing) {
+            return;
+        }
+        PopupMenu menu = new PopupMenu(this, anchor);
+        menu.getMenu().add(0, 1, 0, "中文 全键 (full pinyin)");
+        menu.getMenu().add(0, 2, 1, "中文 九键 (9-key)");
+        menu.getMenu().add(0, 3, 2, "English");
+        menu.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case 1:
+                    setInputMode(InputMode.CHINESE_QWERTY);
+                    return true;
+                case 2:
+                    setInputMode(InputMode.CHINESE_KEYPAD);
+                    return true;
+                default:
+                    setInputMode(InputMode.ENGLISH);
+                    return true;
+            }
+        });
+        menu.show();
+    }
+
+    /** The language key: tap to toggle, long-press to pick the Chinese layout. */
+    private TextView languageKey() {
+        TextView key = keyButton(inputMode.keyLabel(), 1.15f, v -> toggleLanguage(), true);
+        key.setOnLongClickListener(v -> {
+            showChineseLayoutMenu(v);
+            return true;
+        });
+        return key;
+    }
+
+    /** Samsung-style 3x4 pinyin keypad: eight letter groups plus function keys. */
+    private void addKeypadRows(LinearLayout panel) {
+        String[][] groups = {
+                {"ABC", "2"}, {"DEF", "3"}, {"GHI", "4"},
+                {"JKL", "5"}, {"MNO", "6"}, {"PQRS", "7"},
+                {"TUV", "8"}, {"WXYZ", "9"}
+        };
+        int cursor = 0;
+        for (int row = 0; row < 3; row++) {
+            LinearLayout line = new LinearLayout(this);
+            line.setOrientation(LinearLayout.HORIZONTAL);
+            for (int column = 0; column < 3 && cursor < groups.length; column++, cursor++) {
+                final String digit = groups[cursor][1];
+                TextView group = keyButton(groups[cursor][0], 1f, v -> commitKey(digit));
+                // keyButton sizes text by label length, which would render ABC at
+                // 18sp next to PQRS at 11sp. The keypad wants one uniform size.
+                group.setTextSize(15);
+                group.setTypeface(Typeface.DEFAULT_BOLD);
+                line.addView(group);
+            }
+            if (row == 0) {
+                line.addView(deleteKey());
+            } else if (row == 1) {
+                line.addView(keyButton("，", 1.35f, v -> commitSeparator("，"), true));
+            } else {
+                // The last row is one letter group short; 。 fills it so every
+                // row keeps the same four-column geometry.
+                line.addView(keyButton("。", 1f, v -> commitSeparator("。")));
+                line.addView(keyButton("？", 1.35f, v -> commitSeparator("？"), true));
+            }
+            panel.addView(line);
+        }
+    }
+
     private void toggleSymbolsMode() {
         if (recording || processing || keyboardPanel == null) {
             return;
         }
+        settlePinyin(PinyinSession.SettleReason.MODE_CHANGED);
         symbolsMode = !symbolsMode;
         symbolsMoreMode = false;
         shift = false;
@@ -2865,7 +3521,29 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         if (historyMode) {
             hideHistoryPanel();
         }
+        // Resolve any pending reading before audio starts, so the buffer cannot
+        // interleave with the transcript.
+        settlePinyin(PinyinSession.SettleReason.RECORDING_STARTED);
         String provider = Prefs.transcriptionProvider(this);
+        boolean chinese = dictationLanguage().isChinese();
+
+        // The bundled offline models are English-only. Left alone they would
+        // transcribe Mandarin into confident nonsense rather than failing, which
+        // is worse than refusing: the speaker gets no signal anything went wrong.
+        if (chinese && isOfflineTranscriptionProvider(provider)) {
+            setStatus("Chinese needs OpenAI or Deepgram");
+            return;
+        }
+        if (chinese && !Prefs.supportsChineseDictation(provider)) {
+            setStatus("Chinese not supported by " + Prefs.providerLabel(provider));
+            return;
+        }
+        if (chinese && !hasNetworkConnectivity()) {
+            // Do not silently drop to the offline English model.
+            setStatus("Chinese dictation needs a connection");
+            return;
+        }
+
         if (isOfflineTranscriptionProvider(provider)) {
             toggleOfflineRecording(provider);
         } else if (!hasNetworkConnectivity()) {
@@ -2873,6 +3551,15 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         } else {
             toggleCloudRecording();
         }
+    }
+
+    /**
+     * Language for the recording about to start. Snapshotted here rather than
+     * read later, because the providers need it at request-build time and
+     * Deepgram in particular can only be told one language.
+     */
+    private DictationLanguage dictationLanguage() {
+        return inputMode.isChinese() ? DictationLanguage.CHINESE : DictationLanguage.AUTO;
     }
 
     private void toggleCreationCapture() {
@@ -3061,6 +3748,10 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             stopOfflineRecordingAndTranscribe();
             return;
         }
+        if (voiceCallOwnsMicrophone()) {
+            setStatus("Call active - voice typing is unavailable");
+            return;
+        }
         if (!hasAudioPermission()) {
             setStatus("Open settings and grant microphone permission.");
             openSettings();
@@ -3077,6 +3768,10 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private void toggleCloudRecording() {
         if (recording) {
             stopCloudRecordingAndTranscribe();
+            return;
+        }
+        if (voiceCallOwnsMicrophone()) {
+            setStatus("Call active - voice typing is unavailable");
             return;
         }
         if (!hasAudioPermission()) {
@@ -3134,9 +3829,10 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         String sourceForThisInstruction = instructionSourceText;
         boolean translationForThisRecording = translationCapture;
         String targetForThisTranslation = translationTargetLanguage;
+        DictationLanguage languageForThisRecording = dictationLanguage();
         executor.execute(() -> {
             try {
-                String transcript = TranscriptionClient.transcribe(this, audio);
+                String transcript = TranscriptionClient.transcribe(this, audio, languageForThisRecording);
                 processTranscribedCapture(
                         transcript,
                         presetForThisRecording,
@@ -3168,6 +3864,10 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             stopOfflineRecordingAndTranscribe();
             return;
         }
+        if (voiceCallOwnsMicrophone()) {
+            setStatus("Call active - voice typing is unavailable");
+            return;
+        }
         if (!hasAudioPermission()) {
             setStatus("Open settings and grant microphone permission.");
             openSettings();
@@ -3197,6 +3897,10 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     }
 
     private void startOfflineRecordingNow(String statusPrefix, String provider) {
+        if (voiceCallOwnsMicrophone()) {
+            setStatus("Call active - voice typing is unavailable");
+            return;
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             setStatus("Open settings and grant microphone permission.");
             return;
@@ -3315,19 +4019,28 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             boolean instruction,
             String instructionSource,
             boolean translation,
-        String targetLanguage
+            String targetLanguage
     ) throws Exception {
+        String normalizedTranscript = applyPhraseReplacements(
+                transcript == null ? "" : transcript.trim()
+        );
         if (translation) {
             String statusLanguage = compactLanguageName(targetLanguage);
             postStatusSpinner("Translating to " + statusLanguage);
-            String result = TransformClient.translate(this, transcript, targetLanguage, preset, expression);
+            String result = TransformClient.translate(
+                    this,
+                    normalizedTranscript,
+                    targetLanguage,
+                    preset,
+                    expression
+            );
             if (result == null || result.trim().isEmpty()) {
                 throw new IllegalStateException("Translation returned no text.");
             }
             mainHandler.post(() -> {
                 String historyId = Prefs.addTranscriptHistory(
                         this,
-                        transcript,
+                        normalizedTranscript,
                         result,
                         preset,
                         expression,
@@ -3336,7 +4049,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
                 );
                 String inserted = insertVoiceText(result);
                 rememberLastVoiceInsertion(
-                        transcript,
+                        normalizedTranscript,
                         inserted,
                         preset,
                         expression,
@@ -3350,14 +4063,19 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         }
         if (creation) {
             postStatusSpinner("Creating text");
-            String result = TransformClient.createText(this, transcript, preset, expression);
+            String result = TransformClient.createText(
+                    this,
+                    normalizedTranscript,
+                    preset,
+                    expression
+            );
             if (result == null || result.trim().isEmpty()) {
                 throw new IllegalStateException("Text creation returned no text.");
             }
             mainHandler.post(() -> {
                 String historyId = Prefs.addTranscriptHistory(
                         this,
-                        transcript,
+                        normalizedTranscript,
                         result,
                         preset,
                         expression,
@@ -3370,7 +4088,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
                     return;
                 }
                 rememberLastVoiceInsertion(
-                        transcript,
+                        normalizedTranscript,
                         inserted,
                         preset,
                         expression,
@@ -3384,7 +4102,11 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         }
         if (instruction) {
             postStatusSpinner("Applying instruction");
-            String result = TransformClient.applyInstruction(this, instructionSource, transcript);
+            String result = TransformClient.applyInstruction(
+                    this,
+                    instructionSource,
+                    normalizedTranscript
+            );
             mainHandler.post(() -> {
                 if (replaceWholeFieldText(result)) {
                     finishProcessingState("Text updated");
@@ -3395,12 +4117,17 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             return;
         }
 
-        String finalText = transcript;
+        String finalText = normalizedTranscript;
         String finalStatus = "Inserted";
         if (shouldTransform(preset)) {
             postStatusSpinner("Transforming: " + labelForPreset(preset));
             try {
-                finalText = TransformClient.transform(this, transcript, preset, expression);
+                finalText = TransformClient.transform(
+                        this,
+                        normalizedTranscript,
+                        preset,
+                        expression
+                );
             } catch (Exception transformError) {
                 finalStatus = "Inserted raw";
             }
@@ -3410,7 +4137,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         mainHandler.post(() -> {
             String historyId = Prefs.addTranscriptHistory(
                     this,
-                    transcript,
+                    normalizedTranscript,
                     result,
                     preset,
                     expression,
@@ -3419,7 +4146,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             );
             String inserted = insertVoiceText(result);
             rememberLastVoiceInsertion(
-                    transcript,
+                    normalizedTranscript,
                     inserted,
                     preset,
                     expression,
@@ -3790,7 +4517,18 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private void setStatus(String status) {
         if (statusText != null) {
             statusText.setText(status);
+            statusText.setContentDescription(status);
         }
+    }
+
+    private boolean voiceCallOwnsMicrophone() {
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) {
+            return false;
+        }
+        int mode = audioManager.getMode();
+        return mode == AudioManager.MODE_IN_CALL
+                || mode == AudioManager.MODE_IN_COMMUNICATION;
     }
 
     private String concise(Exception e) {
@@ -3976,7 +4714,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     }
 
     private String captureStyleStatus(String prefix) {
-        return prefix + ": " + selectedPresetLabel() + " - " + Prefs.expressionLabel(selectedExpression);
+        return prefix + ": " + selectedPresetLabel();
     }
 
     private String compactLanguageName(String language) {

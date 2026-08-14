@@ -35,11 +35,11 @@ final class OpenAiClient {
             "\\A```(?:[A-Za-z0-9_-]+)?[ \\t]*(?:\\r?\\n)?([\\s\\S]*?)(?:\\r?\\n)?```\\s*\\z"
     );
     private static final Pattern RECOMMENDED_TRANSCRIPTION_MODEL = Pattern.compile(
-            "^(gpt-4o(?:-mini)?-transcribe|whisper-1)$",
+            "^(gpt-transcribe|gpt-4o(?:-mini)?-transcribe|whisper-1)$",
             Pattern.CASE_INSENSITIVE
     );
     private static final Pattern RECOMMENDED_TRANSFORM_MODEL = Pattern.compile(
-            "^(gpt-5\\.5|gpt-5\\.4(?:-mini)?|gpt-5(?:-mini)?|gpt-4\\.1(?:-mini)?)$",
+            "^(gpt-5\\.6(?:-(?:sol|terra|luna))?|gpt-5\\.5|gpt-5\\.4(?:-mini)?|gpt-5(?:-mini)?|gpt-4\\.1(?:-mini)?)$",
             Pattern.CASE_INSENSITIVE
     );
     private static final String OUTPUT_CONTRACT = "\n\nOutput contract:\n"
@@ -51,8 +51,22 @@ final class OpenAiClient {
     }
 
     static String transcribe(Context context, File audioFile) throws Exception {
+        return transcribe(context, audioFile, DictationLanguage.AUTO);
+    }
+
+    static String transcribe(Context context, File audioFile, DictationLanguage language) throws Exception {
         String apiKey = requiredApiKey(context);
-        String model = nonEmpty(Prefs.transcriptionModel(context), "gpt-4o-transcribe");
+        String model = nonEmpty(Prefs.transcriptionModel(context), "gpt-transcribe");
+        if (isRealtimeOnlyTranscriptionModel(model)) {
+            throw new IllegalStateException("GPT Live Transcribe requires a Realtime connection. Choose GPT Transcribe instead.");
+        }
+        List<PhraseReplacement> vocabulary = Prefs.allPhraseReplacements(context);
+        String vocabularyPrompt = supportsVocabularyPrompt(model)
+                ? PersonalVocabulary.transcriptionPrompt(vocabulary)
+                : "";
+        List<String> vocabularyKeywords = supportsStructuredVocabulary(model)
+                ? PersonalVocabulary.keywords(vocabulary)
+                : Collections.emptyList();
         String boundary = "VoiceFlowKeyboardBoundary" + System.currentTimeMillis();
 
         HttpURLConnection connection = (HttpURLConnection) new URL(TRANSCRIPTIONS_URL).openConnection();
@@ -65,6 +79,18 @@ final class OpenAiClient {
 
         try (OutputStream out = connection.getOutputStream()) {
             writePart(out, boundary, "model", model);
+            if (!vocabularyPrompt.isEmpty()) {
+                writePart(out, boundary, "prompt", vocabularyPrompt);
+            }
+            for (String keyword : vocabularyKeywords) {
+                writePart(out, boundary, "keywords[]", keyword);
+            }
+            // Sending nothing means auto-detect, which is what keeps spoken
+            // Chinese working while the keyboard is in English mode. Only narrow
+            // the set when the keyboard is explicitly in Chinese.
+            for (String code : language.openAiLanguages()) {
+                writePart(out, boundary, "languages[]", code);
+            }
             writeFilePart(out, boundary, "file", audioFile, "voiceflow-keyboard.m4a", "audio/mp4");
             out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
         }
@@ -85,6 +111,7 @@ final class OpenAiClient {
         String prompt = nonEmpty(Prefs.promptForPreset(context, preset, expression), Prefs.defaultPromptForPreset(preset));
         return transformWithPrompt(
                 context,
+                nonEmpty(Prefs.transformModelForPreset(context, preset), "gpt-5.4-mini"),
                 prompt,
                 "Transcript:\n" + transcript,
                 Prefs.historyVariantKey(preset, expression)
@@ -93,12 +120,23 @@ final class OpenAiClient {
 
     static String applyInstruction(Context context, String sourceText, String instruction, String prompt) throws Exception {
         String input = "Editing instruction:\n" + instruction + "\n\nSource text:\n" + sourceText;
-        return transformWithPrompt(context, prompt, input, "instruction");
+        return transformWithPrompt(
+                context,
+                nonEmpty(Prefs.transformModel(context), "gpt-5.4-mini"),
+                prompt,
+                input,
+                "instruction"
+        );
     }
 
-    private static String transformWithPrompt(Context context, String prompt, String input, String cacheKey) throws Exception {
+    private static String transformWithPrompt(
+            Context context,
+            String model,
+            String prompt,
+            String input,
+            String cacheKey
+    ) throws Exception {
         String apiKey = requiredApiKey(context);
-        String model = nonEmpty(Prefs.transformModel(context), "gpt-5.4-mini");
         JSONObject baseBody = new JSONObject()
                 .put("model", model)
                 .put("input", prompt + OUTPUT_CONTRACT + "\n\n" + input);
@@ -155,11 +193,37 @@ final class OpenAiClient {
         List<String> filtered = new ArrayList<>();
         for (String model : models) {
             String lower = model.toLowerCase(Locale.US);
-            if (lower.contains("transcribe") || "whisper-1".equals(lower)) {
+            if ((lower.contains("transcribe") || "whisper-1".equals(lower))
+                    && !isRealtimeOnlyTranscriptionModel(model)) {
                 filtered.add(model);
             }
         }
         return withFallbacks(filtered, defaultTranscriptionModels());
+    }
+
+    static boolean isRealtimeOnlyTranscriptionModel(String model) {
+        String lower = model == null ? "" : model.trim().toLowerCase(Locale.US);
+        return "gpt-live-transcribe".equals(lower)
+                || lower.startsWith("gpt-live-transcribe-");
+    }
+
+    private static boolean supportsStructuredVocabulary(String model) {
+        String lower = model == null ? "" : model.trim().toLowerCase(Locale.US);
+        return "gpt-transcribe".equals(lower)
+                || lower.startsWith("gpt-transcribe-");
+    }
+
+    private static boolean supportsVocabularyPrompt(String model) {
+        String lower = model == null ? "" : model.trim().toLowerCase(Locale.US);
+        if (lower.contains("diarize")) {
+            return false;
+        }
+        return supportsStructuredVocabulary(model)
+                || "gpt-4o-transcribe".equals(lower)
+                || lower.startsWith("gpt-4o-transcribe-")
+                || "gpt-4o-mini-transcribe".equals(lower)
+                || lower.startsWith("gpt-4o-mini-transcribe-")
+                || "whisper-1".equals(lower);
     }
 
     static List<String> recommendedTranscriptionModelsFrom(List<String> models) {
@@ -190,6 +254,7 @@ final class OpenAiClient {
 
     static List<String> defaultTranscriptionModels() {
         List<String> models = new ArrayList<>();
+        models.add("gpt-transcribe");
         models.add("gpt-4o-transcribe");
         models.add("gpt-4o-mini-transcribe");
         models.add("gpt-4o-transcribe-diarize");
@@ -302,7 +367,9 @@ final class OpenAiClient {
 
         body.put("prompt_cache_key", promptCacheKey(model, preset, prompt));
         if (gpt5Model) {
-            body.put("prompt_cache_retention", "24h");
+            if (!normalized.startsWith("gpt-5.6")) {
+                body.put("prompt_cache_retention", "24h");
+            }
             body.put("text", new JSONObject().put("verbosity", "low"));
         }
         if (reasoningModel) {

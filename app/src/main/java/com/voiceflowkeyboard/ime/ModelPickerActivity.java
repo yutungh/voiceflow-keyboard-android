@@ -355,6 +355,16 @@ public class ModelPickerActivity extends Activity {
             Toast.makeText(this, "Enter a model ID first.", Toast.LENGTH_SHORT).show();
             return;
         }
+        if (transcription
+                && Prefs.PROVIDER_OPENAI.equals(activeProvider)
+                && OpenAiClient.isRealtimeOnlyTranscriptionModel(trimmed)) {
+            Toast.makeText(
+                    this,
+                    "GPT Live Transcribe is not compatible with recorded dictation. Choose GPT Transcribe.",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
         if (transcription) {
             Prefs.setTranscriptionProvider(this, activeProvider);
             Prefs.setTranscriptionModel(this, trimmed);
@@ -500,6 +510,9 @@ public class ModelPickerActivity extends Activity {
 
     private String modelDescription(String model) {
         String lower = model.toLowerCase();
+        if ("gpt-transcribe".equals(lower)) {
+            return "Recommended for recorded dictation";
+        }
         if (lower.contains("mini")) {
             return "Faster and cheaper";
         }

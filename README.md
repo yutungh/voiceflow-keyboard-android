@@ -54,7 +54,7 @@ Good search terms for this project: Android voice keyboard, VoiceFlow Keyboard, 
 - Optional transcript cleanup via configurable cloud transform providers.
 - Editable API keys, providers, transcription models, transform models, and voice styles.
 - Combined provider/model pickers for voice input and text transform setup.
-- Voice styles: Friends and Work by default, optional Family and Partner templates, editable custom styles, and optional emoji icons for quick recognition.
+- Voice styles: Friends, Work, and Family by default, an optional Partner template, editable custom styles, optional emoji icons, and a collapsed Fun group with Haiku, Pirate, Shakespearean, Noir Detective, and Wizard personas.
 - A mutually exclusive style picker replaces the disabled keys while dictation or translation is recording.
 - A five-step expression control (`Reserved` through `Expressive`) adjusts conversational energy, punctuation, and permitted emoji use independently for each voice style.
 - Voice styles apply to both transcript cleanup and natural target-language localization; voice instruction mode remains independent.
@@ -63,8 +63,13 @@ Good search terms for this project: Android voice keyboard, VoiceFlow Keyboard, 
 - Retone can regenerate the last inserted dictation or translation from its original transcript, safely replace it when the field is unchanged, and keep alternate style/expression versions together in history.
 - Low-latency GPT-5 transform settings with safe fallback retry.
 - Minimal autocorrect layer using Android spell checker suggestions when available.
-- Custom phrase replacement example: `Cloud Code` -> `Claude Code`.
+- Personal vocabulary supports multiple likely mishearings, an exact output, and optional context for names, nicknames, jargon, and commands.
+- GPT Transcribe receives personal exact spellings as keyword hints, while a provider-independent local correction guarantees configured output such as `N P M run sign off` -> `npm run signoff`.
+- Built-in phrase replacement example: `Cloud Code` -> `Claude Code`.
 - Smart spacing for voice inserts.
+- Every new input target and keyboard window opens on the standard letters layout—even when Android reuses the same keyboard view across app switches—with a default-on safety setting that cancels and discards active recordings when the keyboard closes or the input app changes.
+- Active cellular and VoIP calls are detected before recording so Android's microphone restriction is explained instead of silently producing an empty transcript.
+- Compact recording and retone statuses use adaptive sizing and marquee overflow so the full state remains readable.
 - Short voice outputs under 5 words do not get a forced trailing period.
 - Haptics for keyboard taps.
 - Symbols and expanded symbols views.
@@ -155,13 +160,29 @@ XAIAPIKey=...
 DeepgramAPIKey=...
 ```
 
+Personal installations can also use an ignored `.voiceflow-private.json` file to preserve private vocabulary without committing it:
+
+```json
+{
+  "replacements": [
+    {
+      "from": "likely mishearing\nanother mishearing",
+      "to": "ExactSpelling",
+      "context": "Optional private context for GPT Transcribe."
+    }
+  ]
+}
+```
+
+The private installer merges entries by exact-output name, so rerunning it updates those private terms without removing unrelated replacements added in Settings.
+
 This script does not compile keys into the APK. It installs the local debug APK, then writes the keys directly into the connected device's private app preferences with `adb run-as`.
 
 ## Recommended Model Setup
 
 The default OpenAI flow is:
 
-- transcription: `gpt-4o-transcribe`
+- transcription: `gpt-transcribe`
 - transform: a GPT-5 model
 
 The transform request uses low-latency options for GPT-5-style cleanup tasks:
@@ -183,11 +204,13 @@ Provider support:
 
 ## Voice Styles
 
-The default public styles are **Friends** and **Work**.
+The default public styles are **Friends**, **Work**, and **Family**.
 
-**Friends** lightly cleans raw speech-to-text while preserving wording, tone, intent, hedging, slang, and order. **Work** rewrites the transcript into clearer, more polished professional text while preserving meaning and factual content.
+**Friends** lightly cleans raw speech-to-text while preserving wording, tone, intent, hedging, slang, and order. **Work** rewrites the transcript into concise, send-ready professional text while preserving meaning, certainty, boundaries, and factual content. **Family** uses familiar, supportive everyday language that is warmer than Friends but less intimate than Partner, without inventing affection or softening serious content.
 
-Optional **Family** and **Partner** templates add recipient-aware warmth without inventing nicknames, facts, or emotions. Partner can permit a single fitting affectionate emoji when the message itself supports it. These templates are available from Settings but are not enabled in the public build by default.
+The optional **Partner** template adds recipient-aware intimacy without inventing nicknames, facts, or emotions. Partner can permit a fitting affectionate emoji when the message itself supports it.
+
+The keyboard places five novelty personas in a collapsed **Fun** group at the far right of the horizontally scrollable style row. **Haiku** returns only a three-line poem; **Pirate**, **Shakespearean**, **Noir Detective**, and **Wizard** restate the message in an unmistakable persona while preserving facts and avoiding invented story details.
 
 While normal dictation or translation is recording, the disabled keyboard is covered by a single-select voice-style panel. The selected style can be changed before stopping and is applied in the same transform request, so it does not add another processing step. Voice instruction mode is excluded.
 
@@ -219,6 +242,7 @@ Current privacy model:
 - Users bring their own provider API keys.
 - API keys are saved locally on the device in app preferences.
 - When a cloud transcription provider is enabled, recorded audio is sent to that provider after recording stops.
+- With compatible OpenAI transcription models, configured personal vocabulary spellings and context are sent with the recording as transcription hints.
 - When transcript cleanup is enabled, transcript text is sent to the configured transform provider.
 - Offline Vosk and Offline Parakeet transcription keep audio local after the selected local model has been downloaded.
 
@@ -232,8 +256,7 @@ For a production release, you should:
 
 ## Roadmap Ideas
 
-- Realtime streaming transcription to reduce perceived latency.
-- Better custom dictionary and replacement UI.
+- Optional voice-style-specific vocabulary scopes.
 - Encrypted API key storage.
 - Undo last voice insert.
 - Per-field safety rules.
