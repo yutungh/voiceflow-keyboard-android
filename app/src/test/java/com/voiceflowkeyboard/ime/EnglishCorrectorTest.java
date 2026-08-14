@@ -136,8 +136,8 @@ public class EnglishCorrectorTest {
     // ------------------------------------------------------------ precision
 
     /**
-     * The single most important behaviour here. Correctly spelled words must
-     * come back untouched, whatever their frequency.
+     * Correctly spelled words come back untouched. The one exception is a real
+     * word whose neighbour is overwhelmingly commoner, covered below.
      */
     @Test
     public void realWordsAreNeverCorrected() {
@@ -155,6 +155,111 @@ public class EnglishCorrectorTest {
         }
         assertTrue("Correctly spelled words were offered corrections: " + violations,
                 violations.isEmpty());
+    }
+
+    // ------------------------------------------- overruling a real-but-rare word
+
+    /**
+     * The motivating case. "nit" is a real word, but "not" is ~3,250x commoner
+     * and i/o are neighbouring keys, so typing "nit" and pressing space should
+     * silently give "not".
+     */
+    @Test
+    public void aRareRealWordLosesToAnOverwhelminglyCommonNeighbour() {
+        assertTrue(dictionary.contains("nit"));
+        EnglishCorrector.Result result = corrector.suggest("nit", 3);
+        assertFalse("nit should now be correctable", result.isEmpty());
+        assertEquals("not", result.words.get(0));
+        assertTrue("and it should apply without asking", result.autoAccept);
+    }
+
+    /**
+     * The case that sets the threshold. "ate" is one adjacent-key substitution
+     * from "are", which is ~400x commoner — but "ate" is an everyday verb and
+     * rewriting "I ate lunch" would be indefensible. It must stay untouched.
+     */
+    @Test
+    public void anOrdinaryRealWordSurvivesACommonNeighbour() {
+        assertTrue(dictionary.contains("ate"));
+        assertTrue("ate must not be correctable", corrector.suggest("ate", 3).isEmpty());
+    }
+
+    /**
+     * Only adjacent-key substitutions may overrule a real word. "fro" is a
+     * transposition away from the far commoner "for", but "to and fro" is
+     * ordinary English and unigram frequency cannot see the difference.
+     */
+    @Test
+    public void onlyAdjacentSubstitutionsMayOverruleARealWord() {
+        assertTrue(dictionary.contains("fro"));
+        assertTrue("fro -> for is a transposition and must not fire",
+                corrector.suggest("fro", 3).isEmpty());
+        // "sunk" has no overwhelmingly commoner adjacent neighbour at all.
+        assertTrue(corrector.suggest("sunk", 3).isEmpty());
+    }
+
+    /**
+     * A real word that fails the bar gets nothing at all, not chips. Offering
+     * corrections for correctly spelled words would make the strip noise.
+     */
+    @Test
+    public void realWordsBelowTheBarGetNoChipsEither() {
+        for (String word : new String[]{"ate", "fro", "cat", "sunk"}) {
+            assertTrue(word + " should produce no correction chips",
+                    corrector.suggest(word, 3).words.isEmpty());
+        }
+    }
+
+    /**
+     * Sweeps the whole lexicon: every real word the engine is now willing to
+     * correct must independently satisfy the adjacency and gap conditions. This
+     * is the guard against the exception quietly widening.
+     */
+    @Test
+    public void everyOverruledRealWordSatisfiesBothConditions() {
+        List<String> violations = new ArrayList<>();
+        int overruled = 0;
+        for (int i = 0; i < dictionary.size(); i++) {
+            String word = dictionary.wordAt(i);
+            if (word.length() < 3 || word.length() > 12) {
+                continue;
+            }
+            EnglishCorrector.Result result = corrector.suggest(word, 3);
+            if (result.isEmpty()) {
+                continue;
+            }
+            overruled++;
+            String winner = result.words.get(0).toLowerCase();
+            int gap = dictionary.logFrequency(winner) - dictionary.logFrequency(word);
+            if ((!isSingleAdjacentSubstitution(word, winner)
+                    || gap < EnglishCorrector.REAL_WORD_MIN_FREQUENCY_GAP)
+                    && violations.size() < 10) {
+                violations.add(word + " -> " + winner + " gap=" + gap);
+            }
+        }
+        System.out.println("real words the engine will overrule: " + overruled);
+        assertEquals("Overruled a real word without both conditions: " + violations,
+                0, violations.size());
+        assertTrue("Expected the exception to fire for some words", overruled > 0);
+        assertTrue("Exception is far wider than measured (56 pairs)", overruled < 120);
+    }
+
+    /** Independent of the production adjacency check, so the test does not assume it. */
+    private static boolean isSingleAdjacentSubstitution(String a, String b) {
+        if (a.length() != b.length()) {
+            return false;
+        }
+        int at = -1;
+        int differences = 0;
+        for (int i = 0; i < a.length(); i++) {
+            if (a.charAt(i) != b.charAt(i)) {
+                if (differences == 0) {
+                    at = i;
+                }
+                differences++;
+            }
+        }
+        return differences == 1 && KeyProximity.isAdjacent(a.charAt(at), b.charAt(at));
     }
 
     @Test

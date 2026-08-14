@@ -188,20 +188,32 @@ public class EnglishCorrectorCorpusTest {
     }
 
     /**
-     * The precision guard, swept rather than sampled: no correctly spelled word
-     * anywhere in the lexicon may be offered a correction.
+     * The precision guard, swept over the whole lexicon rather than sampled.
+     *
+     * <p>This used to assert a flat zero. It no longer can: a real word whose
+     * neighbour is ~3,000x commoner is now deliberately correctable, which is
+     * what makes {@code nit -> not} work. What must still hold is that the
+     * exception stays vanishingly rare — measured at 55 words out of 82,834,
+     * or 0.066%. The per-word conditions are checked in
+     * {@code EnglishCorrectorTest.everyOverruledRealWordSatisfiesBothConditions};
+     * what this pins is the overall rate, so the exception cannot widen quietly.
      */
     @Test
-    public void noRealWordAnywhereInTheLexiconIsEverCorrected() {
-        List<String> violations = new ArrayList<>();
-        for (int i = 0; i < dictionary.size(); i += 7) {
+    public void theRealWordExceptionStaysVanishinglyRare() {
+        List<String> overruled = new ArrayList<>();
+        for (int i = 0; i < dictionary.size(); i++) {
             String word = dictionary.wordAt(i);
-            if (!corrector.suggest(word, 3).isEmpty() && violations.size() < 10) {
-                violations.add(word);
+            if (!corrector.suggest(word, 3).isEmpty()) {
+                overruled.add(word);
             }
         }
-        assertEquals("Real words were offered corrections: " + violations,
-                0, violations.size());
+        double rate = overruled.size() / (double) dictionary.size();
+        System.out.printf("real words overruled: %d of %d (%.3f%%)%n",
+                overruled.size(), dictionary.size(), rate * 100);
+        assertTrue("The real-word exception has widened well past its measured "
+                        + "size: " + overruled.size() + " words, sample "
+                        + overruled.subList(0, Math.min(15, overruled.size())),
+                overruled.size() <= 120);
     }
 
     /** Two edits may be offered, but must never be imposed. */

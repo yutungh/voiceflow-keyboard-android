@@ -73,6 +73,32 @@ final class EnglishCorrector {
      */
     static final int NON_ADJACENT_PENALTY = 2000;
 
+    /**
+     * How much likelier the alternative must be before a word that is itself in
+     * the lexicon may be silently replaced. 8000 is about 3,000:1.
+     *
+     * <p>Without an exception here the keyboard cannot fix {@code nit} to
+     * {@code not}, which is a slip people make constantly — {@code i} and
+     * {@code o} are neighbours and {@code not} is some 3,250 times commoner —
+     * and refusing it is far more visibly wrong than the risk of allowing it.
+     *
+     * <p>The bar is this high because of what sits just below it. At a 400:1 gap
+     * the rule would also catch {@code ate -> are}: "ate" is an everyday verb,
+     * and silently rewriting "I ate lunch" would be indefensible. A frequency
+     * floor on the typed word does not save it — "ate" ranks below plenty of
+     * obscure words in a book corpus, which badly understates ordinary
+     * conversational vocabulary. At 3,000:1 "ate" and its neighbours drop out
+     * and 56 word pairs remain, the least obscure being {@code foe -> for} and
+     * {@code mire -> more}.
+     *
+     * <p>Those last two are the honest cost, and what the backspace-revert
+     * contract is for: reverting restores the word and teaches it permanently
+     * via {@code Prefs.learnWord}. Note that is also why {@code nit} must not
+     * simply be added to {@code COMMON_TYPOS} instead — the service refuses to
+     * learn any word in that table, so rejecting the correction would not stick.
+     */
+    static final int REAL_WORD_MIN_FREQUENCY_GAP = 8000;
+
     /** Ranked corrections plus the verdict on replacing without asking. */
     static final class Result {
         final List<String> words;
@@ -119,9 +145,13 @@ final class EnglishCorrector {
      * Best corrections for {@code typed}, most likely first, capped at
      * {@code limit}.
      *
-     * <p>Returns {@link Result#NONE} when the input is already a real word: the
+     * <p>A word that is itself in the lexicon is almost always left alone — the
      * commonest way an autocorrect feels broken is changing something the user
-     * spelled correctly on purpose.
+     * spelled correctly on purpose. The one exception is
+     * {@link #REAL_WORD_MIN_FREQUENCY_GAP}, below. When a real word does not
+     * clear that bar it returns {@link Result#NONE} outright rather than
+     * offering chips, because suggesting corrections for correctly spelled words
+     * would make the strip noise.
      */
     Result suggest(String typed, int limit) {
         if (typed == null || limit <= 0) {
@@ -131,9 +161,10 @@ final class EnglishCorrector {
         if (word.length() < 2 || word.length() > dictionary.maxWordLength()) {
             return Result.NONE;
         }
-        if (!isWordCharacters(word) || dictionary.contains(word)) {
+        if (!isWordCharacters(word)) {
             return Result.NONE;
         }
+        boolean realWord = dictionary.contains(word);
 
         char first = word.charAt(0);
         int start = dictionary.bucketStart(first);
@@ -169,11 +200,16 @@ final class EnglishCorrector {
                 ? Integer.compare(a.distance, b.distance)
                 : Integer.compare(b.score, a.score));
 
+        boolean autoAccept = allowsSilentReplacement(word, found, realWord);
+        if (realWord && !autoAccept) {
+            return Result.NONE;
+        }
+
         List<String> ranked = new ArrayList<>(Math.min(limit, found.size()));
         for (int i = 0; i < found.size() && ranked.size() < limit; i++) {
             ranked.add(restoreContractionCase(found.get(i).word));
         }
-        return new Result(ranked, allowsSilentReplacement(word, found));
+        return new Result(ranked, autoAccept);
     }
 
     /** Completions for a word still being typed. Never a correction. */
@@ -198,26 +234,42 @@ final class EnglishCorrector {
      *
      * <p>Independent guards, because a wrong silent replacement is far more
      * damaging than a missed one: the word must be long enough to be a plausible
-     * typo, it must not look like an unfinished word, the fix must be a single
-     * edit, and it must be clearly ahead of the next single-edit candidate. The
-     * typed word having already been rejected as a real word is checked by the
-     * caller in {@link #suggest}.
+     * typo, the fix must be a single edit, and it must be clearly ahead of the
+     * next single-edit candidate. A word already in the lexicon has to clear a
+     * much higher bar again — see {@link #REAL_WORD_MIN_FREQUENCY_GAP}.
      */
-    private boolean allowsSilentReplacement(String word, List<Candidate> ranked) {
+    private boolean allowsSilentReplacement(String word, List<Candidate> ranked, boolean realWord) {
         if (word.length() < SILENT_MIN_LENGTH) {
-            return false;
-        }
-        // The typed word is not in the lexicon, so any word it prefixes is a
-        // strictly longer one — meaning it reads equally well as something
-        // half-typed, or as a longer word with its last letter dropped.
-        // "ther" is a prefix of "there"; replacing it outright with the far
-        // commoner "the" would silently change what was said. Offer both as
-        // chips instead and let the user pick.
-        if (dictionary.firstIndexWithPrefix(word) >= 0) {
             return false;
         }
         Candidate best = ranked.get(0);
         if (best.distance != 1) {
+            return false;
+        }
+        if (realWord) {
+            // Overruling a word the user spelled correctly needs both kinds of
+            // evidence at once: the physical one, that the two keys touch, and
+            // the lexical one, that the alternative is overwhelmingly commoner.
+            // Either alone is not enough.
+            boolean adjacentSubstitution =
+                    substitutionAdjustment(word, best.word) == ADJACENCY_BONUS;
+            // Raw frequencies, deliberately not Candidate.score: the score
+            // already contains ADJACENCY_BONUS, and counting it here would let
+            // the adjacency gate pay for part of the frequency gate.
+            int rawGap = dictionary.logFrequency(best.word) - dictionary.logFrequency(word);
+            if (!adjacentSubstitution || rawGap < REAL_WORD_MIN_FREQUENCY_GAP) {
+                return false;
+            }
+        } else if (dictionary.firstIndexWithPrefix(word) >= 0) {
+            // Not in the lexicon, so anything it prefixes is strictly longer.
+            // Pressing space proves the token is finished, but not that the user
+            // did not drop a suffix: "ther" reads as well as an unfinished
+            // "there" as it does as a typo for the far commoner "the". Offer
+            // both as chips rather than choosing.
+            //
+            // This does not apply above, because a real word is a prefix of
+            // itself — firstIndexWithPrefix("nit") finds "nit" — so it would
+            // block every real word rather than only ambiguous ones.
             return false;
         }
         for (int i = 1; i < ranked.size(); i++) {
