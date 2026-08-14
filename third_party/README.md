@@ -113,3 +113,38 @@ Two further consequences of that flat count, for whoever tunes ranking:
 
 Confirmed absent from the lexicon, and therefore correctly left to the explicit
 typo table rather than dictionary lookup: `im`, `teh`, `dont`.
+
+### First-party supplement — 63 words that are NOT from this source
+
+The shipped asset is not purely upstream. `scripts/build-english-dict.mjs` adds
+63 words the pinned corpus does not contain, listed in its `SUPPLEMENT` array.
+
+This is a defect fix, not an enrichment. The source is Google Books intersected
+with SCOWL, so it knows `okay` but not `ok`, and nothing about texting or
+software. On a phone keyboard that is not merely a gap: before this, the
+corrector treated them as misspellings and silently rewrote `omg` to `org` and
+`thx` to `the`.
+
+**These carry no frequency claim.** Every one is emitted at the lowest count
+present in the pinned corpus — 12,714, derived from the data at build time
+rather than written down, so it cannot drift if the source is ever repinned.
+That is the weakest prior the format can express: enough to be recognised as a
+real word, not enough to outrank a word whose count was actually measured. We do
+not know how common `tbh` is and the asset does not pretend to. Note this is
+recognition, not inertness: a supplement word can still win as a correction when
+it is the only credible candidate one edit away, which is the desired behaviour
+for `istagram → instagram`.
+
+Every entry was checked to be genuinely protected at that weight — no
+adjacent-key substitution rival clears the corrector's real-word override gap.
+Two candidates failed that check and are deliberately excluded: **`np`** (loses
+to `no`, gap 11,208) and **`vlog`** (loses to `blog`, gap 9,342). Defending them
+would have meant inventing a higher weight, which is the exact claim this floor
+convention exists to avoid. Also excluded, for different reasons: single letters
+such as `u` and `r`, which the service discards before the corrector sees them,
+and `im`/`dont`, which must keep expanding to `I'm` and `don't` through
+`COMMON_TYPOS`.
+
+`EnglishCorrectorTest.supplementaryVocabularyIsNeverRewritten` pins the
+protection invariant, so a future change to the override thresholds cannot
+silently re-break them.

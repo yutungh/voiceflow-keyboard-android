@@ -262,15 +262,50 @@ public class EnglishCorrectorTest {
         return differences == 1 && KeyProximity.isAdjacent(a.charAt(at), b.charAt(at));
     }
 
+    /**
+     * The first letter changes in exactly one way: by swapping the first two
+     * characters. Anything else means the bucket scan has been widened and the
+     * scan cost went with it.
+     */
     @Test
-    public void firstLetterIsNeverChanged() {
-        // hte -> the is deliberately out of reach; it belongs to the caller's
-        // explicit typo table. If this ever starts passing, the first-letter
-        // bucket has been widened and the scan cost went with it.
-        for (String candidate : corrector.suggest("hte", 5).words) {
-            assertEquals("Correction changed the first letter: hte -> " + candidate,
-                    'h', candidate.charAt(0));
+    public void theFirstLetterChangesOnlyByASwapOfTheFirstTwo() {
+        for (String typed : new String[]{"hte", "speling", "recieve", "nit", "wich", "kbow"}) {
+            String swapped = typed.length() < 2 ? typed
+                    : "" + typed.charAt(1) + typed.charAt(0) + typed.substring(2);
+            for (String candidate : corrector.suggest(typed, 5).words) {
+                String lower = candidate.toLowerCase();
+                assertTrue(
+                        "Correction changed the first letter without being the swap: "
+                                + typed + " -> " + candidate,
+                        lower.charAt(0) == typed.charAt(0) || lower.equals(swapped));
+            }
         }
+    }
+
+    /**
+     * Swapping the first two letters is the commonest slip the bucket scan
+     * cannot see, so it is probed directly.
+     */
+    @Test
+    public void swappedFirstLettersAreFound() {
+        assertEquals("the", best("hte"));
+        assertEquals("and", best("nad"));
+        assertEquals("you", best("oyu"));
+        assertEquals("from", best("rfom"));
+        assertEquals("that", best("htat"));
+    }
+
+    /**
+     * The swap must not outrank an adjacent-key slip. On a touchscreen,
+     * substitutions outnumber transpositions by roughly fifty to one, so a
+     * neighbouring-key explanation beats a reordering one.
+     */
+    @Test
+    public void anAdjacentKeySlipStillOutranksASwap() {
+        // "ti" swaps to the real word "it", but "to" is one adjacent-key
+        // substitution away and wins.
+        assertEquals("to", best("ti"));
+        assertTrue(dictionary.contains("it"));
     }
 
     @Test
@@ -315,20 +350,116 @@ public class EnglishCorrectorTest {
     }
 
     /**
-     * A word that might simply be unfinished must never be replaced outright.
-     * The typed string is not in the lexicon, so anything it prefixes is a
-     * longer word — it reads equally well as half-typed, or as a longer word
-     * missing its last letter, and picking for the user would silently change
-     * the sentence.
+     * A word that might simply be unfinished must not be replaced outright —
+     * but only when the completion is a plausible thing to have meant. "ther"
+     * reads as an unfinished "there", so it is blocked; "wich" only prefixes
+     * "wichita", which is not what anyone was typing.
      */
     @Test
-    public void wordsThatCouldBeUnfinishedAreNeverReplacedSilently() {
-        String[] prefixes = {"ther", "cet", "wor", "hel"};
-        for (String typed : prefixes) {
+    public void onlyPlausibleCompletionsBlockReplacement() {
+        for (String typed : new String[]{"ther", "wor", "hel"}) {
             assertTrue(typed + " should prefix a longer word",
                     dictionary.firstIndexWithPrefix(typed) >= 0);
             assertFalse(typed + " must not auto-accept", corrector.suggest(typed, 5).autoAccept);
         }
+        // An obscure completion must not shield a common typo. Both of these
+        // prefix something longer ("tehran", "himeji") and must still be fixed.
+        assertTrue("teh should prefix a longer word",
+                dictionary.firstIndexWithPrefix("teh") >= 0);
+        assertEquals("the", best("teh"));
+        assertTrue("teh must be corrected despite prefixing tehran",
+                corrector.suggest("teh", 3).autoAccept);
+        assertEquals("home", best("hime"));
+        assertTrue(corrector.suggest("hime", 3).autoAccept);
+    }
+
+    /**
+     * When the best completion and the best correction are the same word they
+     * agree rather than compete, so the completion guard must not fire.
+     */
+    @Test
+    public void aCompletionThatIsAlsoTheCorrectionDoesNotBlock() {
+        assertEquals("because", best("becaus"));
+        assertTrue(corrector.suggest("becaus", 3).autoAccept);
+    }
+
+    // ------------------------------------------------------- two-letter words
+
+    /**
+     * The exhaustive sweep behind {@code SHORT_PAIRS}: with the length gate
+     * lowered to two, 279 of the 676 two-letter strings would be silently
+     * rewritten — including {@code mr -> me}, {@code tv -> to} and
+     * {@code oz -> of}. So only named pairs are allowed through, and this pins
+     * that nothing else is.
+     */
+    @Test
+    public void onlyNamedTwoLetterPairsAreEverReplaced() {
+        List<String> unexpected = new ArrayList<>();
+        for (char a = 'a'; a <= 'z'; a++) {
+            for (char b = 'a'; b <= 'z'; b++) {
+                String typed = "" + a + b;
+                EnglishCorrector.Result result = corrector.suggest(typed, 3);
+                if (result.autoAccept && !result.isEmpty()) {
+                    unexpected.add(typed + "->" + result.words.get(0));
+                }
+            }
+        }
+        // Exactly the reviewed list, nothing more.
+        assertEquals("Unreviewed two-letter strings are being silently replaced: "
+                + unexpected, 2, unexpected.size());
+        assertTrue(unexpected.toString(), unexpected.contains("ti->to"));
+        assertTrue(unexpected.toString(), unexpected.contains("od->of"));
+    }
+
+    /** The pair the user asked for, plus the one in the same shape. */
+    @Test
+    public void reviewedShortSlipsAreFixed() {
+        assertEquals("to", best("ti"));
+        assertTrue(corrector.suggest("ti", 3).autoAccept);
+        assertEquals("of", best("od"));
+        assertTrue(corrector.suggest("od", 3).autoAccept);
+    }
+
+    /**
+     * Being on the reviewed list is not a licence to guess. "si" ranks "is"
+     * first but "so" is within the runner-up margin, so it stays chip-only —
+     * the review waives the length and completion proxies, never the margin.
+     */
+    @Test
+    public void aReviewedPairStillLosesToAmbiguity() {
+        assertEquals("is", best("si"));
+        assertFalse("si is genuinely ambiguous with so",
+                corrector.suggest("si", 3).autoAccept);
+        assertEquals("in", best("ni"));
+        assertFalse("ni is genuinely ambiguous with no",
+                corrector.suggest("ni", 3).autoAccept);
+    }
+
+    // -------------------------------------------------- supplementary lexicon
+
+    /**
+     * The pinned corpus is Google Books, so it has no texting or software
+     * vocabulary and the corrector used to rewrite "omg" to "org" and "thx" to
+     * "the". Every supplementary word must now survive untouched.
+     */
+    @Test
+    public void supplementaryVocabularyIsNeverRewritten() {
+        String[] supplement = {
+                "ok", "lol", "omg", "lmao", "smh", "nvm", "brb", "ttyl", "idk", "imo",
+                "tbh", "fyi", "btw", "tldr", "pls", "plz", "thx", "ty", "ya",
+                "api", "url", "json", "xml", "html", "css", "sms", "gps", "usb", "pdf",
+                "faq", "ios", "github", "instagram", "tiktok", "spotify", "uber",
+                "emoji", "selfie", "hashtag",
+        };
+        List<String> broken = new ArrayList<>();
+        for (String word : supplement) {
+            assertTrue(word + " missing from the lexicon", dictionary.contains(word));
+            EnglishCorrector.Result result = corrector.suggest(word, 3);
+            if (!result.isEmpty()) {
+                broken.add(word + " -> " + result.words);
+            }
+        }
+        assertTrue("Supplementary words are being corrected: " + broken, broken.isEmpty());
     }
 
     /**
@@ -350,11 +481,15 @@ public class EnglishCorrectorTest {
             }
             assertTrue(typed + ": too short to replace silently",
                     typed.length() >= EnglishCorrector.SILENT_MIN_LENGTH);
-            assertFalse(typed + ": already a real word",
-                    dictionary.contains(typed));
-            assertTrue(typed + ": could be an unfinished longer word",
-                    dictionary.firstIndexWithPrefix(typed) < 0);
             assertFalse(typed + ": auto-accepted with no candidate", result.isEmpty());
+            // A real word may now be overruled, but only under the much
+            // stricter adjacency-plus-gap rule, checked in its own sweep.
+            if (dictionary.contains(typed)) {
+                int gap = dictionary.logFrequency(result.words.get(0).toLowerCase())
+                        - dictionary.logFrequency(typed);
+                assertTrue(typed + ": real word overruled without the gap",
+                        gap >= EnglishCorrector.REAL_WORD_MIN_FREQUENCY_GAP);
+            }
         }
     }
 

@@ -42,7 +42,9 @@ public class EnglishDictionaryTest {
 
     @Test
     public void dictionaryLoadsExpectedShape() {
-        assertEquals(82834, dictionary.size());
+        // 82,834 from the pinned corpus plus 63 supplementary words the
+        // book-derived source has never heard of ("ok", "url", "emoji", ...).
+        assertEquals(82897, dictionary.size());
         assertEquals(28, dictionary.maxWordLength());
         assertEquals(1000, dictionary.logScale());
     }

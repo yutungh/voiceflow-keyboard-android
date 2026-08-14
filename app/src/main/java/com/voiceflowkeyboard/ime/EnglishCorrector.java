@@ -45,6 +45,46 @@ final class EnglishCorrector {
     static final int SILENT_MIN_LENGTH = 3;
 
     /**
+     * Two-letter slips allowed through {@link #SILENT_MIN_LENGTH}, as an
+     * explicit reviewed list rather than a rule.
+     *
+     * <p>Lowering the gate to two was measured instead of assumed, by running
+     * all 676 two-letter strings through the engine: 279 of them would be
+     * silently rewritten. Among them {@code mr -> me}, {@code ms -> me},
+     * {@code tv -> to}, {@code ai -> a}, {@code oz -> of}, {@code cc -> cd} and
+     * {@code rx -> re}. Two letters is simply too little evidence — the space is
+     * dense with initials, titles, units, state codes and abbreviations, and no
+     * lexicon can enumerate them.
+     *
+     * <p>So the length rule stays and the exceptions are named. Each pair here
+     * was checked to be the engine's top candidate already.
+     *
+     * <p>A named pair waives both the length gate and the completion guard, and
+     * nothing else — the single-edit and runner-up-margin checks still apply.
+     * Waiving the completion guard is deliberate: at two characters almost
+     * everything prefixes a common word, so it blocks indiscriminately. It asks
+     * "did the user drop a suffix?", and {@code si} standing in for
+     * {@code since} would mean dropping three letters, which is not a slip. Both
+     * guards are proxies for uncertainty, and an explicit review is the thing
+     * they were standing in for.
+     *
+     * <p>Kept in the corrector rather than the service's {@code COMMON_TYPOS}
+     * table on purpose: that table is deliberately unlearnable, so rejecting one
+     * of its corrections would not stick, whereas rejecting one of these teaches
+     * the word permanently.
+     */
+    private static final String[][] SHORT_PAIRS = {
+            {"ti", "to"},
+            {"od", "of"},
+            // Considered and rejected: si -> is and ni -> in. Both are ranked
+            // top by the engine, but only barely: "si" is nearly as close to
+            // "so" as to "is", and "ni" to "no" as to "in", so each falls to the
+            // runner-up margin. That guard is not a proxy for uncertainty the
+            // way the other two are — it is the measurement of it — so a review
+            // does not get to overrule it. They stay chip-only.
+    };
+
+    /**
      * How far the best candidate must beat the runner-up before we replace
      * without asking. Scores are natural-log-scaled by the dictionary's
      * {@code logScale}, so 1000 means "about 2.7x more likely".
@@ -98,6 +138,23 @@ final class EnglishCorrector {
      * learn any word in that table, so rejecting the correction would not stick.
      */
     static final int REAL_WORD_MIN_FREQUENCY_GAP = 8000;
+
+    /**
+     * How close a possible completion has to be before it blocks a silent
+     * replacement. About 55:1.
+     *
+     * <p>This guard used to refuse outright whenever the typed word prefixed
+     * anything longer, which was far too blunt: {@code wich} prefixes
+     * {@code wichita} and {@code teh} prefixes {@code tehran}, so two of the
+     * commonest typos in English were being protected by obscure place names.
+     * What matters is not whether a completion exists but whether it is a
+     * plausible thing to have meant.
+     *
+     * <p>The margin sits between the measured cases: {@code ther} leads its
+     * completion {@code there} by 3,496 and must still be blocked, while
+     * {@code wich} leads {@code wichita} by 4,684 and must be allowed through.
+     */
+    static final int COMPLETION_AMBIGUITY_MARGIN = 4000;
 
     /** Ranked corrections plus the verdict on replacing without asking. */
     static final class Result {
@@ -189,6 +246,7 @@ final class EnglishCorrector {
             int score = dictionary.logFrequencyAt(i) + substitutionAdjustment(word, candidate);
             found.add(new Candidate(candidate, distance, score));
         }
+        addFirstLetterSwap(word, realWord, found);
         if (found.isEmpty()) {
             return Result.NONE;
         }
@@ -210,6 +268,37 @@ final class EnglishCorrector {
             ranked.add(restoreContractionCase(found.get(i).word));
         }
         return new Result(ranked, autoAccept);
+    }
+
+    /**
+     * Adds the word with its first two characters swapped, when that happens to
+     * be a real word.
+     *
+     * <p>Swapping the first two letters is the one common slip the bucket scan
+     * structurally cannot see, because it is the only single edit that changes
+     * the first letter — and it accounts for {@code hte}, {@code ot},
+     * {@code si}, {@code ni}, {@code nad}, {@code ofr}, {@code htat},
+     * {@code iwth}, {@code oyu} and {@code rfom}, which are among the most
+     * frequent typos in English.
+     *
+     * <p>Probed directly rather than by scanning a second bucket. There is
+     * exactly one candidate to consider, so one binary search answers it; the
+     * alternative doubles a scan that already costs most of the keystroke budget.
+     *
+     * <p>Restricted to inputs that are not themselves real words, so it cannot
+     * feed the deliberately narrow real-word override, and given the plain
+     * dictionary score with no bonus: on a touchscreen, transpositions are far
+     * rarer than adjacent-key slips, so this must not outrank one.
+     */
+    private void addFirstLetterSwap(String word, boolean realWord, List<Candidate> found) {
+        if (realWord || word.length() < 2 || word.charAt(0) == word.charAt(1)) {
+            return;
+        }
+        String swapped = word.charAt(1) + ("" + word.charAt(0)) + word.substring(2);
+        int index = dictionary.indexOf(swapped);
+        if (index >= 0) {
+            found.add(new Candidate(swapped, 1, dictionary.logFrequencyAt(index)));
+        }
     }
 
     /** Completions for a word still being typed. Never a correction. */
@@ -239,10 +328,11 @@ final class EnglishCorrector {
      * much higher bar again — see {@link #REAL_WORD_MIN_FREQUENCY_GAP}.
      */
     private boolean allowsSilentReplacement(String word, List<Candidate> ranked, boolean realWord) {
-        if (word.length() < SILENT_MIN_LENGTH) {
+        Candidate best = ranked.get(0);
+        boolean reviewedShortPair = isAllowedShortPair(word, best.word);
+        if (word.length() < SILENT_MIN_LENGTH && !reviewedShortPair) {
             return false;
         }
-        Candidate best = ranked.get(0);
         if (best.distance != 1) {
             return false;
         }
@@ -260,16 +350,13 @@ final class EnglishCorrector {
             if (!adjacentSubstitution || rawGap < REAL_WORD_MIN_FREQUENCY_GAP) {
                 return false;
             }
-        } else if (dictionary.firstIndexWithPrefix(word) >= 0) {
-            // Not in the lexicon, so anything it prefixes is strictly longer.
+        } else if (!reviewedShortPair && hasCompetingCompletion(word, best)) {
             // Pressing space proves the token is finished, but not that the user
             // did not drop a suffix: "ther" reads as well as an unfinished
-            // "there" as it does as a typo for the far commoner "the". Offer
-            // both as chips rather than choosing.
+            // "there" as it does as a typo for the far commoner "the".
             //
-            // This does not apply above, because a real word is a prefix of
-            // itself — firstIndexWithPrefix("nit") finds "nit" — so it would
-            // block every real word rather than only ambiguous ones.
+            // Only applies to non-words. A real word is a prefix of itself, so
+            // this would block every one of them rather than the ambiguous ones.
             return false;
         }
         for (int i = 1; i < ranked.size(); i++) {
@@ -284,6 +371,38 @@ final class EnglishCorrector {
             }
         }
         return true;
+    }
+
+    /** Whether {@code typed -> correction} is one of the named short exceptions. */
+    private static boolean isAllowedShortPair(String typed, String correction) {
+        for (String[] pair : SHORT_PAIRS) {
+            if (pair[0].equals(typed) && pair[1].equals(correction)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True when some longer word starting with {@code word} is a plausible thing
+     * to have been typing, judged against how strongly we believe the correction.
+     *
+     * <p>A completion identical to the correction is skipped rather than
+     * counted: for {@code becaus} the best completion and the best correction
+     * are both {@code because}, so the two agree and there is nothing ambiguous
+     * about it.
+     */
+    private boolean hasCompetingCompletion(String word, Candidate best) {
+        for (String completion : dictionary.completionsFor(word, 2)) {
+            if (completion.equals(best.word)) {
+                continue;
+            }
+            int completionScore = dictionary.logFrequency(completion);
+            if (completionScore >= best.score - COMPLETION_AMBIGUITY_MARGIN) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

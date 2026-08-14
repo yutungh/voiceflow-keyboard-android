@@ -1,5 +1,5 @@
 #v1
-#words=82834
+#words=82897
 #logscale=1000
 #maxword=28
 a	-4089
@@ -923,7 +923,7 @@ adjuster	-13546
 adjusters	-13889
 adjusting	-12051
 adjustment	-10690
-adjustments	-11289
+adjustments	-11290
 adjusts	-12964
 adjutant	-14249
 adjuvant	-13570
@@ -1213,6 +1213,7 @@ aet	-14548
 aether	-14859
 aetiology	-15014
 aetna	-13250
+afaik	-17568
 afar	-13468
 afeard	-17377
 afebrile	-17303
@@ -1255,7 +1256,7 @@ affinity	-12023
 affirm	-12683
 affirmation	-13181
 affirmations	-14021
-affirmative	-11815
+affirmative	-11816
 affirmatively	-14597
 affirmed	-12499
 affirming	-13448
@@ -1525,6 +1526,7 @@ ahab	-14578
 ahasuerus	-16330
 ahead	-9857
 ahem	-13656
+ahh	-17568
 ahimsa	-15568
 ahithophel	-17430
 ahmad	-12597
@@ -1575,6 +1577,7 @@ airbase	-15149
 airbases	-17018
 airbed	-15928
 airbeds	-16352
+airbnb	-17568
 airboat	-15472
 airborne	-11995
 airbrush	-13230
@@ -1649,7 +1652,7 @@ airwave	-14838
 airwaves	-13545
 airway	-12782
 airways	-11642
-airworthiness	-14316
+airworthiness	-14317
 airworthy	-16802
 airy	-12989
 ais	-12737
@@ -1973,7 +1976,7 @@ allegro	-12509
 allele	-12979
 alleles	-13228
 allelic	-14477
-allelopathic	-16903
+allelopathic	-16904
 allelopathy	-16935
 alleluia	-14752
 allemande	-15789
@@ -2365,7 +2368,7 @@ amethyst	-12249
 amethysts	-15546
 amhara	-16362
 amharic	-14637
-amherst	-12156
+amherst	-12157
 ami	-12413
 amiability	-16975
 amiable	-14272
@@ -3311,6 +3314,7 @@ aphrodisia	-16646
 aphrodisiac	-14448
 aphrodisiacs	-14792
 aphrodite	-11899
+api	-17568
 apia	-15062
 apiaries	-16155
 apiary	-15662
@@ -4430,7 +4434,7 @@ assortments	-14437
 asst	-12353
 assuage	-15318
 assuaged	-16516
-assuaging	-17430
+assuaging	-17431
 assumable	-15873
 assume	-10081
 assumed	-10708
@@ -4642,7 +4646,7 @@ atoned	-16393
 atonement	-13619
 atones	-17363
 atonic	-16959
-atoning	-15886
+atoning	-15887
 atop	-12760
 atreus	-16061
 atria	-14478
@@ -5202,6 +5206,7 @@ awoke	-13576
 awoken	-15517
 awol	-13974
 awry	-14225
+aww	-17568
 axe	-12186
 axed	-14817
 axeman	-16204
@@ -5363,7 +5368,7 @@ backfire	-14399
 backfired	-15185
 backfires	-15377
 backfiring	-16568
-backflow	-14424
+backflow	-14425
 backgammon	-12388
 background	-9247
 backgrounder	-14388
@@ -6216,7 +6221,7 @@ bathhouse	-15143
 bathhouses	-16280
 bathing	-12195
 batholith	-16341
-bathos	-17188
+bathos	-17189
 bathrobe	-14503
 bathrobes	-14542
 bathroom	-10299
@@ -6256,7 +6261,7 @@ batters	-13798
 battery	-9262
 battier	-16423
 battiest	-17393
-batting	-12229
+batting	-12230
 battle	-9758
 battleaxe	-16787
 battled	-13777
@@ -6657,7 +6662,7 @@ behring	-15529
 beiderbecke	-16219
 beige	-11747
 beijing	-10956
-being	-7710
+being	-7711
 beings	-11401
 beira	-15714
 beirut	-12479
@@ -6713,7 +6718,7 @@ belittles	-16584
 belittling	-15635
 belize	-11233
 belizean	-15853
-bell	-9972
+bell	-9973
 bella	-11880
 belladonna	-14232
 bellamy	-13636
@@ -7249,7 +7254,7 @@ bigfoot	-13499
 bigger	-10626
 biggest	-10197
 biggie	-14101
-biggies	-15869
+biggies	-15870
 biggin	-15444
 biggins	-16137
 biggish	-17499
@@ -9024,6 +9029,7 @@ brazils	-16922
 brazing	-14423
 brazos	-13948
 brazzaville	-14228
+brb	-17568
 breach	-11423
 breached	-13487
 breaches	-12973
@@ -9191,7 +9197,7 @@ bribery	-13426
 bribes	-13811
 bribing	-15141
 brice	-13816
-brick	-11111
+brick	-11112
 brickbats	-16347
 bricked	-16347
 bricking	-17114
@@ -9588,6 +9594,7 @@ bsds	-16480
 btl	-14553
 btry	-16079
 btu	-12808
+btw	-17568
 bub	-14407
 bubba	-13039
 bubble	-11027
@@ -9704,7 +9711,7 @@ bugatti	-14037
 bugbear	-15409
 bugeye	-16639
 bugged	-14372
-bugger	-13977
+bugger	-13978
 buggered	-15966
 buggering	-16825
 buggers	-15042
@@ -11714,7 +11721,7 @@ cautery	-16409
 caution	-11324
 cautionary	-13812
 cautioned	-13376
-cautioning	-15821
+cautioning	-15822
 cautions	-13324
 cautious	-12560
 cautiously	-13318
@@ -14561,7 +14568,7 @@ commandant	-14006
 commandants	-16924
 commanded	-12505
 commandeer	-16294
-commandeered	-15795
+commandeered	-15796
 commandeering	-16872
 commander	-10896
 commanders	-12621
@@ -15367,7 +15374,7 @@ conformists	-16671
 conformity	-12206
 conforms	-12793
 confound	-14606
-confounded	-14282
+confounded	-14283
 confounder	-17164
 confounding	-14163
 confounds	-15829
@@ -15389,7 +15396,7 @@ confusedly	-16675
 confuses	-14274
 confusing	-11724
 confusingly	-14743
-confusion	-11154
+confusion	-11155
 confusions	-15061
 confute	-17431
 cong	-12925
@@ -15806,7 +15813,7 @@ contactor	-14697
 contacts	-9648
 contagion	-14357
 contagious	-13194
-contain	-9816
+contain	-9817
 contained	-9803
 container	-10703
 containerised	-16532
@@ -16812,7 +16819,7 @@ country	-7963
 countryman	-14410
 countrymen	-13918
 countryside	-11587
-countrysides	-17538
+countrysides	-17539
 countrywide	-12683
 counts	-10473
 county	-7775
@@ -16864,7 +16871,7 @@ courtesans	-16126
 courtesies	-15482
 courtesy	-10810
 courthouse	-12349
-courthouses	-14618
+courthouses	-14619
 courtier	-15201
 courtiers	-15169
 courting	-14039
@@ -16986,6 +16993,7 @@ cozumel	-12774
 cpd	-12881
 cpl	-12465
 cps	-12316
+cpu	-17568
 crab	-11861
 crabbe	-15195
 crabbed	-17068
@@ -17702,6 +17710,7 @@ crystalloid	-17176
 crystals	-11592
 csc	-12476
 csonka	-16353
+css	-17568
 ctesiphon	-17523
 cthulhu	-13745
 ctn	-13820
@@ -17928,7 +17937,7 @@ curled	-13657
 curler	-15307
 curlers	-15102
 curlew	-14692
-curlews	-16792
+curlews	-16793
 curling	-12605
 curls	-13534
 curly	-12400
@@ -17982,7 +17991,7 @@ curtsy	-17035
 curule	-16638
 curvaceous	-15491
 curvature	-12874
-curvatures	-15795
+curvatures	-15796
 curve	-10798
 curved	-12075
 curves	-11473
@@ -18332,7 +18341,7 @@ damietta	-17212
 damion	-15548
 dammed	-15514
 damming	-15825
-dammit	-13346
+dammit	-13347
 damn	-10803
 damnable	-16054
 damnation	-14084
@@ -18978,7 +18987,7 @@ decree	-12009
 decreed	-13958
 decreeing	-16902
 decrees	-13491
-decrement	-14356
+decrement	-14357
 decremental	-17440
 decremented	-15611
 decrementing	-16611
@@ -19368,7 +19377,7 @@ delightfully	-13905
 delighting	-15041
 delights	-12654
 delilah	-14087
-delimit	-15334
+delimit	-15335
 delimitation	-15002
 delimited	-13334
 delimiter	-13631
@@ -19382,7 +19391,7 @@ delineating	-14928
 delineation	-13783
 delineations	-16086
 delineator	-16069
-delinquencies	-15542
+delinquencies	-15543
 delinquency	-13094
 delinquent	-12824
 delinquents	-15011
@@ -19749,7 +19758,7 @@ depleted	-12830
 depletes	-15918
 depleting	-14137
 depletion	-12693
-deplorable	-14465
+deplorable	-14466
 deplore	-15300
 deplored	-15410
 deplores	-15630
@@ -20370,7 +20379,7 @@ diagnostician	-16419
 diagnosticians	-17384
 diagnostics	-11822
 diagonal	-12142
-diagonalize	-17238
+diagonalize	-17239
 diagonalized	-17005
 diagonally	-14164
 diagonals	-14916
@@ -20657,7 +20666,7 @@ dignify	-16224
 dignitaries	-14224
 dignitary	-15902
 dignities	-16120
-dignity	-11799
+dignity	-11800
 digraph	-15304
 digraphs	-15435
 digress	-14070
@@ -20744,7 +20753,7 @@ dimness	-16450
 dimorphic	-16113
 dimorphism	-15498
 dimple	-14809
-dimpled	-15140
+dimpled	-15141
 dimples	-14413
 dimpling	-17018
 dims	-14583
@@ -22564,7 +22573,7 @@ drillers	-15177
 drilling	-11422
 drillings	-16359
 drills	-12149
-drily	-16792
+drily	-16793
 drin	-15815
 drink	-9827
 drinkability	-16052
@@ -23368,7 +23377,7 @@ edging	-13524
 edgings	-16458
 edgy	-13716
 edh	-15146
-edibility	-16903
+edibility	-16904
 edible	-12478
 edibles	-14761
 edict	-14163
@@ -23470,7 +23479,7 @@ effectuate	-14699
 effectuated	-16326
 effectuating	-16722
 effectuation	-16995
-effeminacy	-16272
+effeminacy	-16273
 effeminate	-14939
 effendi	-15343
 efferent	-15447
@@ -23557,6 +23566,7 @@ egypt	-10211
 egyptian	-11273
 egyptians	-13298
 egyptology	-15121
+eh	-17568
 ehrenberg	-15239
 ehrlich	-13555
 eichmann	-15040
@@ -24133,6 +24143,7 @@ emmet	-14025
 emmett	-13411
 emmy	-12993
 emo	-12370
+emoji	-17568
 emollient	-15202
 emollients	-15891
 emolument	-16464
@@ -24585,7 +24596,7 @@ enjoyably	-16323
 enjoyed	-10652
 enjoying	-11308
 enjoyment	-11863
-enjoyments	-16007
+enjoyments	-16008
 enjoys	-11812
 enki	-15981
 enkidu	-16060
@@ -26359,7 +26370,7 @@ extrabold	-15947
 extracellular	-12819
 extract	-10808
 extractable	-15217
-extracted	-11660
+extracted	-11661
 extracting	-12608
 extraction	-11354
 extractions	-14589
@@ -26816,6 +26827,7 @@ fanti	-16553
 fantom	-14361
 fanzine	-14321
 fanzines	-15200
+faq	-17568
 faqir	-17429
 faqs	-9914
 far	-8669
@@ -29049,7 +29061,7 @@ fourteenth	-13140
 fourth	-9954
 fourthly	-15246
 fourths	-14154
-fovea	-15843
+fovea	-15844
 fowl	-13366
 fowler	-12067
 fowles	-15366
@@ -29174,7 +29186,7 @@ franklins	-16470
 frankly	-12049
 franklyn	-15031
 frankness	-15242
-franks	-13075
+franks	-13076
 franny	-15446
 frantic	-13081
 frantically	-13832
@@ -29644,7 +29656,7 @@ fulvous	-17388
 fum	-14623
 fumaroles	-17314
 fumble	-13479
-fumbled	-14719
+fumbled	-14720
 fumbles	-13853
 fumbling	-14549
 fume	-13633
@@ -29826,6 +29838,7 @@ fuzzing	-17179
 fuzzy	-11546
 fwd	-11245
 fwy	-14221
+fyi	-17568
 fyke	-16722
 fyn	-15431
 gab	-13475
@@ -30877,13 +30890,15 @@ girth	-13910
 girths	-15954
 gisborne	-13915
 gisela	-14925
-giselle	-14437
+giselle	-14438
 gish	-14559
 gissing	-16131
 gist	-13579
 git	-12797
 gite	-14690
 gites	-14443
+github	-17568
+gitlab	-17568
 gits	-15356
 giuliani	-13739
 giuseppe	-12944
@@ -31233,7 +31248,7 @@ goalkeeping	-15339
 goalless	-16353
 goalmouth	-17121
 goalpost	-16798
-goalposts	-15691
+goalposts	-15692
 goals	-9598
 goalscorer	-16053
 goalscorers	-16262
@@ -31564,6 +31579,8 @@ goy	-15577
 goya	-14105
 goyim	-16431
 goys	-17100
+gps	-17568
+gpu	-17568
 grab	-11173
 grabbed	-12115
 grabber	-13169
@@ -31878,7 +31895,7 @@ greats	-13347
 greaves	-14291
 grebe	-14303
 grebes	-15829
-grecian	-14510
+grecian	-14511
 greco	-13338
 gree	-14015
 greece	-10143
@@ -33271,6 +33288,7 @@ hashed	-14788
 hashes	-14005
 hashing	-14007
 hashish	-14830
+hashtag	-17568
 hasidic	-15187
 hasidim	-16811
 hasidism	-16469
@@ -33443,6 +33461,7 @@ hazing	-14392
 hazlitt	-15572
 hazmat	-13656
 hazy	-13731
+hdmi	-17568
 he	-6466
 he'd	-14407
 he'll	-14407
@@ -33817,7 +33836,7 @@ help	-6787
 helped	-10158
 helper	-11994
 helpers	-12520
-helpful	-9369
+helpful	-9370
 helpfully	-15064
 helpfulness	-13838
 helping	-10011
@@ -33932,7 +33951,7 @@ hercegovina	-14690
 herculaneum	-15717
 herculean	-15329
 hercules	-12377
-herd	-12180
+herd	-12181
 herded	-15179
 herder	-14293
 herders	-14944
@@ -34435,6 +34454,7 @@ hive	-13227
 hives	-13283
 hiya	-14017
 hmm	-11749
+hmmm	-17568
 hmong	-13790
 hoad	-16577
 hoagie	-15942
@@ -34745,7 +34765,7 @@ homophonic	-17463
 homos	-15684
 homosexual	-11963
 homosexuality	-12330
-homosexually	-17125
+homosexually	-17126
 homosexuals	-13036
 homozygote	-16263
 homozygous	-14189
@@ -34771,7 +34791,7 @@ honest	-10795
 honestly	-11708
 honesty	-12080
 honey	-10902
-honeybee	-14702
+honeybee	-14703
 honeybees	-15370
 honeycomb	-13852
 honeycombed	-16970
@@ -34923,7 +34943,7 @@ hornbill	-15679
 hornbills	-16692
 hornblende	-16065
 hornblower	-14679
-hornbook	-17125
+hornbook	-17126
 horne	-13087
 horned	-13366
 hornet	-13266
@@ -35173,6 +35193,7 @@ hrothgar	-16577
 hrs	-10629
 hrvatska	-13600
 hryvnia	-14188
+html	-17568
 hts	-13057
 huambo	-17018
 huang	-12340
@@ -35890,9 +35911,10 @@ idiosyncrasies	-15129
 idiosyncrasy	-16445
 idiosyncratic	-13935
 idiot	-11669
-idiotic	-13855
+idiotic	-13856
 idiotically	-17179
 idiots	-12582
+idk	-17568
 idle	-11424
 idled	-15765
 idleness	-14816
@@ -35913,7 +35935,7 @@ idolizes	-17119
 idolizing	-17202
 idols	-13065
 ids	-11577
-idun	-17391
+idun	-17392
 idyll	-15318
 idyllic	-13807
 idylls	-16353
@@ -35964,6 +35986,7 @@ iguazu	-15134
 ihram	-16663
 ii	-8312
 iii	-9147
+iirc	-17568
 ijssel	-16817
 ike	-12835
 ikea	-12963
@@ -36098,6 +36121,7 @@ imbued	-14352
 imbues	-16338
 imbuing	-16747
 imelda	-15180
+imho	-17568
 imhotep	-15890
 imidazole	-15314
 imidazoles	-15808
@@ -36211,6 +36235,7 @@ immunosuppressive	-14279
 immunotherapy	-14155
 immutability	-16202
 immutable	-13899
+imo	-17568
 imodium	-15883
 imogen	-14160
 imogene	-15391
@@ -37167,7 +37192,7 @@ infarcts	-16328
 infatuated	-15189
 infatuation	-14537
 infeasibility	-16800
-infeasible	-14573
+infeasible	-14574
 infect	-12676
 infected	-11079
 infecting	-14185
@@ -37310,7 +37335,7 @@ infrared	-11208
 infrasonic	-17033
 infrastructural	-14645
 infrastructure	-9832
-infrastructures	-12879
+infrastructures	-12880
 infrequency	-16848
 infrequent	-13546
 infrequently	-13734
@@ -37567,7 +37592,7 @@ input	-9156
 inputs	-11155
 inputted	-15602
 inputting	-14245
-inquest	-14056
+inquest	-14057
 inquests	-16062
 inquire	-11416
 inquired	-13203
@@ -37714,6 +37739,7 @@ inst	-11801
 instabilities	-14218
 instability	-12207
 instable	-16686
+instagram	-17568
 instal	-14713
 install	-9501
 installation	-9397
@@ -38579,6 +38605,7 @@ ionizing	-13882
 ionosphere	-14316
 ionospheric	-14515
 ions	-12139
+ios	-17568
 iota	-13675
 iowa	-9741
 iowan	-16030
@@ -39388,6 +39415,7 @@ jiva	-15290
 jive	-12585
 jives	-17022
 jiving	-16981
+jk	-17568
 joab	-15403
 joachim	-13144
 joan	-11089
@@ -39586,6 +39614,7 @@ joys	-12952
 joystick	-12679
 joysticks	-13826
 jpn	-12935
+json	-17568
 juan	-10856
 juana	-14562
 juanita	-13673
@@ -39663,7 +39692,7 @@ juicing	-15012
 juicy	-11873
 jujitsu	-15277
 juju	-14566
-jujube	-16204
+jujube	-16205
 juke	-13868
 jukebox	-12198
 jukeboxes	-14215
@@ -40714,7 +40743,7 @@ korean	-10482
 koreans	-13445
 korma	-16388
 kornberg	-16297
-kors	-13550
+kors	-13551
 koruna	-12983
 kory	-15251
 korzybski	-16992
@@ -40750,7 +40779,7 @@ krakow	-13074
 kramer	-12373
 krasnodar	-15401
 krasnoyarsk	-14922
-kraut	-14572
+kraut	-14573
 krauts	-17536
 krebs	-13909
 krefeld	-15163
@@ -41542,7 +41571,7 @@ lax	-12464
 laxative	-14391
 laxatives	-14336
 laxer	-16930
-laxity	-15195
+laxity	-15196
 laxness	-17008
 lay	-10422
 layabout	-17377
@@ -42437,7 +42466,7 @@ limited	-8538
 limiter	-13728
 limiters	-15067
 limiting	-11410
-limitless	-13570
+limitless	-13571
 limits	-10113
 limn	-16738
 limnology	-14836
@@ -42538,6 +42567,7 @@ linkable	-15733
 linkage	-12050
 linkages	-12532
 linked	-10073
+linkedin	-17568
 linker	-12718
 linkers	-15201
 linking	-10673
@@ -42655,7 +42685,7 @@ listlessly	-16554
 listlessness	-16824
 liston	-14701
 lists	-9138
-listserver	-14703
+listserver	-14704
 liszt	-13968
 lit	-11256
 litanies	-16489
@@ -42776,6 +42806,7 @@ llanos	-16068
 llewellyn	-13639
 llewelyn	-15085
 lloyd	-11171
+lmao	-17568
 loach	-14995
 loaches	-16427
 load	-9568
@@ -42807,7 +42838,7 @@ loathe	-14281
 loathed	-15322
 loathes	-16205
 loathing	-13531
-loathsome	-14781
+loathsome	-14782
 loaves	-14144
 lob	-12339
 lobar	-16301
@@ -42834,7 +42865,7 @@ lobster	-12105
 lobsters	-13915
 lobule	-16672
 lobules	-16611
-local	-7601
+local	-7602
 locale	-11202
 locales	-13034
 localisation	-13678
@@ -42869,6 +42900,7 @@ loci	-13284
 lock	-10100
 lockable	-14122
 lockbox	-15016
+lockdown	-17568
 locke	-12538
 lockean	-16831
 locked	-10820
@@ -42990,6 +43022,7 @@ loiter	-16000
 loitered	-16909
 loitering	-14936
 loki	-13569
+lol	-17568
 lola	-12665
 lolita	-11443
 loll	-16238
@@ -43007,7 +43040,7 @@ lollypops	-17170
 lomax	-14238
 lombard	-13084
 lombardi	-13799
-lombards	-16418
+lombards	-16419
 lombardy	-13950
 lombok	-14345
 lombroso	-17363
@@ -43696,6 +43729,7 @@ macaulay	-13925
 macaw	-14543
 macaws	-15204
 macbeth	-12942
+macbook	-17568
 macbride	-15531
 macc	-14690
 maccabees	-15185
@@ -44401,7 +44435,7 @@ manometric	-17446
 manometry	-15505
 manor	-11245
 manorial	-16297
-manors	-14731
+manors	-14732
 manpower	-12339
 manque	-15912
 mans	-12592
@@ -44488,7 +44522,7 @@ marabou	-15152
 maraca	-16921
 maracaibo	-15145
 maracas	-15275
-maracay	-16821
+maracay	-16822
 maras	-16470
 maraschino	-15878
 marat	-15086
@@ -44605,7 +44639,7 @@ marimbas	-16734
 marin	-12273
 marina	-11170
 marinade	-13709
-marinades	-14391
+marinades	-14392
 marinara	-14683
 marinas	-13386
 marinate	-14929
@@ -44923,7 +44957,7 @@ mastiffs	-15742
 mastitis	-14620
 mastodon	-14767
 mastodons	-16554
-mastoid	-16022
+mastoid	-16023
 mastoiditis	-17146
 masts	-14077
 masturbate	-12931
@@ -46669,7 +46703,7 @@ misc	-10174
 miscalculate	-17436
 miscalculated	-15890
 miscalculation	-15353
-miscalculations	-16272
+miscalculations	-16273
 miscarriage	-13336
 miscarriages	-14758
 miscarried	-16016
@@ -46946,6 +46980,7 @@ mks	-14075
 mkt	-13253
 mlle	-15729
 mme	-13652
+mms	-17568
 mnemonic	-13883
 mnemonics	-14928
 mnemosyne	-15938
@@ -47250,7 +47285,7 @@ monetize	-15374
 monetized	-16410
 monetizing	-16055
 money	-7955
-moneybags	-16453
+moneybags	-16454
 moneybox	-16935
 moneyboxes	-17444
 moneychangers	-17349
@@ -48157,7 +48192,7 @@ murderously	-17128
 murders	-12467
 murdoch	-12842
 mure	-15478
-murex	-15923
+murex	-15924
 muriel	-13679
 murillo	-15031
 murine	-13205
@@ -48293,7 +48328,7 @@ mutational	-14828
 mutations	-11987
 mute	-12348
 muted	-13569
-mutely	-16770
+mutely	-16771
 mutes	-15075
 mutilate	-15562
 mutilated	-14238
@@ -48876,7 +48911,7 @@ negligee	-16219
 negligence	-11994
 negligent	-13163
 negligently	-15056
-negligible	-12721
+negligible	-12722
 negligibly	-16423
 negotiability	-16803
 negotiable	-12609
@@ -49229,7 +49264,7 @@ nibelung	-17137
 nibelungenlied	-17458
 niblick	-17374
 nibs	-15045
-nicaea	-16035
+nicaea	-16036
 nicaragua	-11282
 nicaraguan	-13709
 nicaraguans	-16568
@@ -49268,7 +49303,7 @@ nicks	-13530
 nicobar	-14582
 nicodemus	-15065
 nicola	-12833
-nicolai	-14380
+nicolai	-14381
 nicolas	-12193
 nicole	-11145
 nicolson	-14547
@@ -49478,7 +49513,7 @@ nobleness	-16862
 nobler	-15146
 nobles	-13479
 noblesse	-15618
-noblest	-14809
+noblest	-14810
 noblewoman	-16912
 nobly	-15333
 nobodies	-15765
@@ -50088,7 +50123,7 @@ numberplate	-15962
 numbers	-9027
 numbing	-14378
 numbingly	-16225
-numbly	-17118
+numbly	-17119
 numbness	-13784
 numbs	-16602
 numbskull	-16375
@@ -50179,6 +50214,7 @@ nutty	-13579
 nuzzle	-16689
 nuzzled	-16316
 nuzzling	-16588
+nvm	-17568
 nyala	-15807
 nyasa	-17310
 nyaya	-16958
@@ -50487,7 +50523,7 @@ ocotillo	-15543
 oct	-8341
 octagon	-13872
 octagonal	-14365
-octagons	-16935
+octagons	-16936
 octahedra	-16745
 octahedral	-15672
 octahedron	-15987
@@ -50690,6 +50726,7 @@ oise	-14859
 oisin	-16607
 oistrakh	-16685
 ojibwa	-15599
+ok	-17568
 oka	-14503
 okapi	-16033
 okavango	-13226
@@ -50810,6 +50847,7 @@ omen	-13415
 omens	-14732
 omentum	-16463
 omer	-14120
+omg	-17568
 omicron	-14423
 ominous	-13532
 ominously	-15185
@@ -52791,7 +52829,7 @@ parathion	-15334
 parathyroid	-14042
 paratroop	-17534
 paratrooper	-14846
-paratroopers	-14884
+paratroopers	-14885
 paratroops	-17331
 paratuberculosis	-15691
 paratyphoid	-16889
@@ -53260,7 +53298,7 @@ pattered	-17448
 pattering	-16861
 pattern	-9673
 patterned	-13085
-patterning	-14089
+patterning	-14090
 patterns	-9952
 patters	-15978
 patterson	-11661
@@ -53360,13 +53398,14 @@ payware	-16633
 pc	-8169
 pcs	-10297
 pct	-11394
+pdf	-17568
 pea	-12468
 peabody	-12895
 peace	-9334
 peaceable	-14877
 peaceably	-15338
 peaceful	-11359
-peacefully	-13206
+peacefully	-13207
 peacefulness	-15603
 peacekeeper	-14973
 peacekeepers	-13912
@@ -53712,7 +53751,7 @@ pentacle	-14649
 pentacles	-15839
 pentad	-16932
 pentagon	-11715
-pentagonal	-16124
+pentagonal	-16125
 pentagons	-16539
 pentagram	-14220
 pentagrams	-16308
@@ -53943,7 +53982,7 @@ periscopes	-17455
 perish	-13302
 perishable	-13918
 perishables	-15903
-perished	-13755
+perished	-13756
 perisher	-16543
 perishers	-17100
 perishes	-16291
@@ -55502,6 +55541,7 @@ plover	-13861
 plovers	-15291
 ploy	-13848
 ploys	-15868
+pls	-17568
 pluck	-13318
 plucked	-14006
 plucker	-14560
@@ -55581,6 +55621,7 @@ ply	-12601
 plying	-15029
 plymouth	-11065
 plywood	-12820
+plz	-17568
 pm	-6798
 pmed	-16436
 pming	-17303
@@ -56486,7 +56527,7 @@ prague	-10965
 praia	-13787
 prairie	-11023
 prairies	-13659
-praise	-11017
+praise	-11018
 praised	-12481
 praises	-12949
 praiseworthy	-15049
@@ -57270,7 +57311,7 @@ privies	-16662
 privilege	-11418
 privileged	-11844
 privileges	-11451
-privileging	-15869
+privileging	-15870
 privily	-16985
 privity	-15782
 privy	-13501
@@ -57999,7 +58040,7 @@ prudential	-12361
 prudently	-14884
 prudery	-17506
 prudes	-17103
-prudish	-16124
+prudish	-16125
 pruitt	-14163
 prune	-13576
 pruned	-14388
@@ -58297,7 +58338,7 @@ punchinello	-17266
 punching	-13202
 punchline	-14702
 punchlines	-16183
-punchy	-14983
+punchy	-14984
 punctate	-16164
 punctilious	-16979
 punctual	-14472
@@ -58645,7 +58686,7 @@ quadratures	-17381
 quadrennial	-15499
 quadric	-16143
 quadriceps	-15120
-quadrics	-16204
+quadrics	-16205
 quadriga	-16840
 quadrilateral	-15134
 quadrilaterals	-16034
@@ -58721,7 +58762,7 @@ quantify	-12789
 quantifying	-13853
 quantisation	-16357
 quantised	-17357
-quantitative	-11277
+quantitative	-11278
 quantitatively	-13835
 quantities	-11214
 quantity	-9562
@@ -59361,7 +59402,7 @@ ranching	-14302
 rancho	-11994
 rancid	-13127
 rancidity	-17255
-rancorous	-16594
+rancorous	-16595
 rancour	-16774
 rand	-11304
 randal	-13825
@@ -59757,7 +59798,7 @@ realm	-11391
 realms	-12617
 realness	-16161
 realpolitik	-15290
-reals	-13458
+reals	-13459
 realtor	-11417
 realtors	-11289
 realty	-10934
@@ -60329,6 +60370,7 @@ reddening	-15328
 redder	-15415
 reddest	-17029
 reddish	-13364
+reddit	-17568
 rede	-14452
 redecorate	-16010
 redecorated	-15635
@@ -60558,7 +60600,7 @@ referent	-14575
 referential	-14125
 referentially	-17225
 referents	-15532
-referral	-10866
+referral	-10867
 referrals	-11408
 referred	-9838
 referrer	-12877
@@ -61041,7 +61083,7 @@ relativism	-14136
 relativist	-16102
 relativistic	-13376
 relativistically	-17518
-relativists	-16770
+relativists	-16771
 relativity	-12555
 relativized	-16960
 relaunch	-14508
@@ -61089,7 +61131,7 @@ relevant	-9391
 relevantly	-16440
 reliabilities	-16355
 reliability	-10375
-reliable	-10189
+reliable	-10190
 reliably	-12724
 reliance	-11402
 reliant	-12849
@@ -61739,7 +61781,7 @@ resealing	-16955
 research	-7461
 researched	-12343
 researcher	-11414
-researchers	-10286
+researchers	-10287
 researches	-13378
 researching	-11953
 reseat	-16701
@@ -62430,7 +62472,7 @@ reworked	-13967
 reworking	-14422
 reworkings	-17135
 reworks	-16360
-rewound	-15982
+rewound	-15983
 rewrite	-12229
 rewrites	-14604
 rewriting	-13054
@@ -62799,7 +62841,7 @@ rites	-12875
 ritter	-12988
 ritual	-11852
 ritualism	-17408
-ritualist	-17364
+ritualist	-17365
 ritualistic	-15078
 ritualistically	-17497
 ritualized	-16270
@@ -63002,6 +63044,7 @@ roentgen	-15676
 roentgenology	-17146
 roes	-15822
 roethke	-15543
+rofl	-17568
 rogelio	-15505
 roger	-10471
 rogers	-10876
@@ -63253,7 +63296,7 @@ rotenone	-15928
 roth	-11941
 rotherham	-13326
 rothko	-14698
-rothschild	-13613
+rothschild	-13614
 rotifer	-16749
 rotifers	-16340
 rotisserie	-13980
@@ -64692,7 +64735,7 @@ scholar	-11393
 scholarly	-11956
 scholars	-11220
 scholarship	-10588
-scholarships	-10984
+scholarships	-10985
 scholastic	-12419
 scholastically	-17506
 scholasticism	-16272
@@ -65373,7 +65416,7 @@ seedbeds	-17377
 seeded	-12996
 seeder	-15560
 seeders	-14994
-seedier	-17238
+seedier	-17239
 seeding	-13203
 seedless	-15209
 seedling	-13562
@@ -65450,7 +65493,7 @@ seismically	-16184
 seismicity	-14794
 seismogram	-16088
 seismograph	-15796
-seismographic	-17238
+seismographic	-17239
 seismographs	-16858
 seismological	-15143
 seismologist	-16526
@@ -65499,6 +65542,7 @@ seleucid	-16488
 seleucus	-16749
 self	-8476
 selfhood	-15900
+selfie	-17568
 selfish	-12578
 selfishly	-14953
 selfishness	-13862
@@ -66246,7 +66290,7 @@ sheepfold	-16409
 sheepish	-15113
 sheepishly	-15355
 sheepshead	-15635
-sheepskin	-13466
+sheepskin	-13467
 sheepskins	-16213
 sheer	-11303
 sheered	-17538
@@ -66305,7 +66349,7 @@ shepherds	-13153
 sheppard	-13019
 sheqalim	-17111
 sheqel	-15979
-sheraton	-11696
+sheraton	-11697
 sherbet	-14712
 sherbets	-16987
 sherbrooke	-13749
@@ -66859,7 +66903,7 @@ sidecar	-14673
 sidecars	-16375
 sided	-11597
 sidekick	-13053
-sidekicks	-15238
+sidekicks	-15239
 sidelight	-16280
 sidelights	-15883
 sideline	-13585
@@ -66995,6 +67039,7 @@ signposted	-14775
 signposting	-15796
 signposts	-14718
 signs	-9740
+signup	-17568
 sigrid	-14951
 sigurd	-14949
 sihanouk	-15885
@@ -67786,7 +67831,7 @@ sloppy	-12923
 slops	-16887
 slosh	-16166
 sloshed	-16457
-sloshing	-16051
+sloshing	-16052
 slot	-10130
 sloth	-13858
 slothful	-15756
@@ -67874,7 +67919,7 @@ slutty	-13123
 sly	-12991
 slyly	-15471
 smack	-12830
-smacked	-14389
+smacked	-14390
 smacker	-17486
 smackers	-16898
 smacking	-14466
@@ -67933,6 +67978,7 @@ smelters	-15310
 smelting	-14416
 smelts	-17402
 smetana	-15340
+smh	-17568
 smidgen	-15797
 smidgeon	-17551
 smilax	-15972
@@ -68014,6 +68060,7 @@ smothers	-14980
 smoulder	-17546
 smouldering	-15724
 smriti	-16384
+sms	-17568
 smudge	-14291
 smudged	-15778
 smudges	-15430
@@ -68374,7 +68421,7 @@ soffit	-15287
 sofia	-12119
 soft	-9528
 softback	-15643
-softball	-11407
+softball	-11408
 softballs	-15630
 softbound	-15250
 softcover	-12217
@@ -69443,7 +69490,7 @@ sporran	-15368
 sporrans	-15492
 sport	-9065
 sported	-15098
-sportier	-16376
+sportier	-16377
 sporting	-10011
 sportive	-15161
 sports	-7757
@@ -69463,6 +69510,7 @@ sportswriter	-15709
 sportswriters	-16031
 sporty	-13025
 spot	-9916
+spotify	-17568
 spotless	-13627
 spotlessly	-16042
 spotlight	-10898
@@ -69682,7 +69730,7 @@ squinted	-15620
 squinting	-15235
 squints	-16723
 squinty	-16802
-squire	-13135
+squire	-13136
 squires	-13912
 squirm	-14781
 squirmed	-15519
@@ -69704,6 +69752,7 @@ sri	-10546
 srinagar	-14402
 sriracha	-17329
 sruti	-17445
+ssd	-17568
 ssh	-11725
 st	-8584
 sta	-11759
@@ -69816,7 +69865,7 @@ stalagmites	-16283
 stale	-13139
 stalemate	-14248
 stalemated	-17267
-staleness	-16988
+staleness	-16989
 stalin	-12869
 stalingrad	-14788
 stalinism	-15295
@@ -70338,7 +70387,7 @@ stiffener	-16029
 stiffeners	-15991
 stiffening	-15027
 stiffens	-16634
-stiffer	-14476
+stiffer	-14477
 stiffest	-16690
 stiffly	-15375
 stiffness	-12990
@@ -70422,7 +70471,7 @@ stipulate	-14134
 stipulated	-12861
 stipulates	-13916
 stipulating	-15263
-stipulation	-13449
+stipulation	-13450
 stipulations	-13970
 stir	-11627
 stirk	-17524
@@ -70505,7 +70554,7 @@ stoles	-14485
 stolichnaya	-16891
 stolid	-16129
 stolidly	-17408
-stolon	-17552
+stolon	-17553
 stolons	-16955
 stoma	-15303
 stomach	-11224
@@ -71421,7 +71470,7 @@ succeeding	-12731
 succeeds	-12869
 success	-9125
 successes	-11914
-successful	-9440
+successful	-9441
 successfully	-10311
 succession	-12096
 successional	-15080
@@ -72564,7 +72613,7 @@ synchronization	-11932
 synchronizations	-16818
 synchronize	-12913
 synchronized	-12718
-synchronizer	-14642
+synchronizer	-14643
 synchronizes	-14740
 synchronizing	-13954
 synchronous	-12546
@@ -72703,7 +72752,7 @@ tab	-10259
 tabard	-15704
 tabards	-16946
 tabasco	-14143
-tabatha	-15297
+tabatha	-15298
 tabbed	-13531
 tabbies	-16726
 tabbing	-15405
@@ -73334,6 +73383,7 @@ taxpaying	-16318
 taylor	-9917
 tayside	-14170
 tazza	-16549
+tbh	-17568
 tbilisi	-13709
 tbs	-13139
 tbsp	-12939
@@ -74012,6 +74062,7 @@ thanks	-8687
 thanksgiving	-11304
 thanksgivings	-16606
 thant	-16367
+thanx	-17568
 thar	-14496
 tharp	-14657
 that	-5071
@@ -74099,7 +74150,7 @@ theoreticians	-15939
 theories	-11017
 theorise	-17202
 theorised	-16995
-theorising	-16058
+theorising	-16059
 theorist	-14092
 theorists	-13306
 theorize	-15469
@@ -74454,7 +74505,7 @@ thrust	-11950
 thruster	-14649
 thrusters	-14769
 thrusting	-14208
-thrusts	-14266
+thrusts	-14267
 thruway	-15009
 thu	-9082
 thuban	-16147
@@ -74524,6 +74575,7 @@ thwart	-13750
 thwarted	-14023
 thwarting	-15206
 thwarts	-15758
+thx	-17568
 thy	-10898
 thyestes	-17476
 thylacine	-16642
@@ -74640,6 +74692,7 @@ tigrinya	-15710
 tigris	-14082
 tijuana	-13237
 tiki	-12656
+tiktok	-17568
 til	-11462
 tilapia	-14471
 tilburg	-14131
@@ -74890,6 +74943,7 @@ tivoli	-12327
 tizzy	-15852
 tlaloc	-17143
 tlaxcala	-16063
+tldr	-17568
 tlemcen	-17442
 tlingit	-15374
 to	-3799
@@ -74950,7 +75004,7 @@ toerag	-16855
 toes	-11685
 toff	-15773
 toffee	-13912
-toffees	-16317
+toffees	-16318
 toffs	-15934
 toft	-15039
 tofu	-13002
@@ -75415,7 +75469,7 @@ townships	-13421
 townsman	-16277
 townsmen	-15309
 townspeople	-14737
-townsville	-13176
+townsville	-13177
 towpath	-15609
 tows	-15285
 tox	-14370
@@ -75761,7 +75815,7 @@ transonic	-15591
 transp	-14538
 transpacific	-15962
 transparencies	-13534
-transparency	-11517
+transparency	-11518
 transparent	-11138
 transparently	-13909
 transpiration	-14996
@@ -76343,7 +76397,7 @@ trow	-15431
 trowbridge	-14015
 trowel	-14402
 trowels	-15522
-troy	-11143
+troy	-11144
 troyes	-15179
 troys	-16420
 truancy	-14282
@@ -76456,6 +76510,7 @@ tsunamis	-14102
 tsushima	-16278
 tsvetaeva	-17398
 tswana	-16005
+ttyl	-17568
 ttys	-15506
 tuamotu	-16657
 tuareg	-15634
@@ -76678,7 +76733,7 @@ turnstone	-15912
 turntable	-12855
 turntables	-13103
 turpentine	-15009
-turpin	-14532
+turpin	-14533
 turpitude	-15420
 turquoise	-12094
 turret	-13592
@@ -76833,6 +76888,7 @@ twopence	-17285
 twos	-14646
 twosome	-15690
 twp	-11878
+ty	-17568
 tyburn	-16647
 tyche	-16852
 tycho	-14562
@@ -76924,6 +76980,7 @@ tyson	-12555
 tyumen	-15939
 tzar	-16371
 ubangi	-17198
+uber	-17568
 ubiquitous	-12677
 ubiquitously	-15895
 ubiquity	-14221
@@ -77941,7 +77998,7 @@ unite	-12142
 united	-7501
 unitedly	-17109
 unites	-13557
-unities	-16246
+unities	-16247
 uniting	-13307
 unitised	-17522
 unitive	-17283
@@ -78132,7 +78189,7 @@ unpaved	-14412
 unpeeled	-16252
 unperceived	-16905
 unperfected	-17424
-unperformed	-17188
+unperformed	-17189
 unpersuaded	-17129
 unpersuasive	-16061
 unperturbed	-15403
@@ -78748,6 +78805,7 @@ urgently	-12902
 urges	-12086
 urging	-12561
 urgings	-16735
+uri	-17568
 uriah	-14111
 uric	-14603
 uriel	-15255
@@ -78762,6 +78820,7 @@ urinating	-14567
 urination	-13811
 urine	-11613
 uris	-13660
+url	-17568
 urls	-11459
 urmia	-17559
 urn	-12594
@@ -78791,6 +78850,7 @@ usability	-11689
 usable	-11987
 usage	-9966
 usages	-13958
+usb	-17568
 use	-6623
 useable	-13717
 used	-7159
@@ -80686,7 +80746,7 @@ wavebands	-16641
 waved	-13345
 waveform	-12548
 waveforms	-13874
-wavefront	-14226
+wavefront	-14227
 waveguide	-13779
 waveguides	-14699
 wavelength	-12047
@@ -81066,6 +81126,7 @@ whatchamacallit	-17277
 whatever	-9741
 whatnot	-14098
 whats	-11337
+whatsapp	-17568
 whatsit	-17123
 whatsoever	-11639
 wheal	-16103
@@ -81754,7 +81815,7 @@ withal	-14461
 withdraw	-11665
 withdrawal	-11100
 withdrawals	-12945
-withdrawing	-13216
+withdrawing	-13217
 withdrawn	-11693
 withdraws	-13754
 withdrew	-12893
@@ -81852,7 +81913,7 @@ wolverine	-12769
 wolverines	-13433
 wolves	-12017
 woman	-8945
-womanhood	-14478
+womanhood	-14479
 womanizer	-16105
 womanizing	-16288
 womankind	-16335
@@ -82020,7 +82081,7 @@ workout	-11498
 workouts	-12824
 workpiece	-14701
 workpieces	-16166
-workplace	-10471
+workplace	-10472
 workplaces	-13062
 workroom	-15296
 workrooms	-16809
@@ -82294,6 +82355,7 @@ xiv	-12388
 xix	-13138
 xizang	-16541
 xmas	-11858
+xml	-17568
 xor	-13641
 xref	-13363
 xrefs	-15931
@@ -82326,6 +82388,7 @@ xylene	-14387
 xylenes	-15815
 xylophone	-14561
 xylophones	-16445
+ya	-17568
 yacc	-14535
 yacht	-11422
 yachting	-13042
@@ -82399,7 +82462,7 @@ yawning	-14406
 yawns	-15507
 yawp	-16959
 yaws	-16212
-yazoo	-14360
+yazoo	-14361
 yea	-11281
 yeager	-14020
 yeah	-9950

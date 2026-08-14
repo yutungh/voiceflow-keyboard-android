@@ -53,6 +53,45 @@ const FLOOR_COUNT = 300000;
 const DROP = new Set(["you'v"]); // typo for "you've"
 const ADD = new Map([["you've", FLOOR_COUNT]]); // absent upstream entirely
 
+/**
+ * First-party supplementary vocabulary.
+ *
+ * The upstream list is Google Books Ngram intersected with SCOWL, so it knows
+ * "okay" but not "ok", and nothing at all about texting or software. On a phone
+ * keyboard that is not a gap, it is a defect: without these the corrector treats
+ * "omg" and "thx" as misspellings and silently rewrites them to "org" and "the".
+ *
+ * These are NOT frequency data. Each is emitted at the lowest count present in
+ * the pinned corpus, which is the weakest prior the format can express: enough
+ * to be recognised as a real word, never enough to win a ranking contest against
+ * a word that was actually measured. We do not know how common "tbh" is and this
+ * file does not pretend to.
+ *
+ * Every entry below was checked to be genuinely protected at that weight — that
+ * is, to have no adjacent-key substitution rival clearing the corrector's
+ * real-word override gap. Two candidates failed that check and are deliberately
+ * absent: "np" (loses to "no") and "vlog" (loses to "blog"). Including them
+ * would have meant inventing a higher weight to defend them, which is exactly
+ * the claim this floor convention exists to avoid making.
+ *
+ * Deliberately excluded for other reasons: single letters like "u" and "r",
+ * which the service discards before the corrector ever sees them; and "im" and
+ * "dont", which must keep expanding to "I'm" and "don't" through COMMON_TYPOS.
+ */
+const SUPPLEMENT = [
+  // chat and messaging
+  "ok", "lol", "omg", "lmao", "rofl", "smh", "nvm", "jk", "brb", "ttyl",
+  "idk", "imo", "imho", "tbh", "fyi", "btw", "iirc", "afaik", "tldr",
+  "pls", "plz", "thx", "thanx", "ty", "ya", "eh", "ahh", "aww", "hmmm",
+  // software and the web
+  "api", "uri", "url", "json", "xml", "html", "css", "sms", "mms",
+  "gps", "cpu", "gpu", "ssd", "usb", "hdmi", "pdf", "faq", "ios",
+  "github", "gitlab", "reddit", "instagram", "tiktok", "whatsapp",
+  "spotify", "uber", "airbnb", "macbook", "linkedin",
+  // ordinary modern words the corpus predates
+  "emoji", "selfie", "hashtag", "lockdown", "signup",
+];
+
 function parseSource(raw) {
   const lines = raw.split(/\r?\n/);
   const entries = [];
@@ -102,6 +141,26 @@ function build(entries) {
     }
   }
 
+  // Derived from the data rather than written down, so it cannot drift away
+  // from the corpus if the pinned source is ever changed.
+  let minimumCount = Infinity;
+  for (const count of byWord.values()) {
+    if (count < minimumCount) {
+      minimumCount = count;
+    }
+  }
+  const supplementAdded = [];
+  const supplementSkipped = [];
+  for (const word of SUPPLEMENT) {
+    if (byWord.has(word)) {
+      // Upstream already knows it; never overwrite a measured count with ours.
+      supplementSkipped.push(word);
+      continue;
+    }
+    byWord.set(word, minimumCount);
+    supplementAdded.push(word);
+  }
+
   let totalCount = 0;
   for (const count of byWord.values()) {
     totalCount += count;
@@ -133,6 +192,9 @@ function build(entries) {
     wordCount: words.length,
     maxWordLength,
     totalCount,
+    minimumCount,
+    supplementAdded,
+    supplementSkipped,
   };
 }
 
@@ -155,7 +217,15 @@ function assertSortedForJava(text) {
 
 const raw = fs.readFileSync(SOURCE, "utf8");
 const { entries, rejected } = parseSource(raw);
-const { text, wordCount, maxWordLength, totalCount } = build(entries);
+const {
+  text,
+  wordCount,
+  maxWordLength,
+  totalCount,
+  minimumCount,
+  supplementAdded,
+  supplementSkipped,
+} = build(entries);
 const verifiedRows = assertSortedForJava(text);
 
 fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
@@ -168,6 +238,11 @@ console.log(`parsed      : ${entries.length.toLocaleString()}`);
 // Never let a filter drop rows silently; a shrinking lexicon should be visible.
 console.log(`rejected    : ${rejected.length} ${rejected.length ? JSON.stringify(rejected) : ""}`);
 console.log(`added       : ${ADD.size} ${ADD.size ? JSON.stringify([...ADD.keys()]) : ""}`);
+console.log(`supplement  : ${supplementAdded.length} at the corpus minimum count ${minimumCount.toLocaleString()}`);
+if (supplementSkipped.length) {
+  // Upstream gaining one of these later should be visible, not silent.
+  console.log(`  already upstream, left at their measured counts: ${JSON.stringify(supplementSkipped)}`);
+}
 console.log(`words       : ${wordCount.toLocaleString()} (sort-verified ${verifiedRows.toLocaleString()})`);
 console.log(`max word len: ${maxWordLength}`);
 console.log(`total count : ${totalCount.toLocaleString()}`);
