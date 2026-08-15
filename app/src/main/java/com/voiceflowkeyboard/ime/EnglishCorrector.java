@@ -73,6 +73,24 @@ final class EnglishCorrector {
      * of its corrections would not stick, whereas rejecting one of these teaches
      * the word permanently.
      */
+    /**
+     * The runner-up margin applied to a reviewed short pair, instead of
+     * {@link #SILENT_MARGIN}.
+     *
+     * <p>{@link #SILENT_MARGIN} was raised to 3000 by calibration against long
+     * real-word typos, where the danger is a plausible wrong word. That number
+     * has nothing to say about a hand-checked two-letter pair, and applying it
+     * blindly would kill {@code ti -> to}, whose margin is 2962 — "to" being
+     * twenty times likelier than the runner-up "it" is not ambiguity, it just
+     * fell under a threshold raised for a different reason.
+     *
+     * <p>1000 is the original general margin, so a reviewed pair still has to
+     * clear the bar the whole engine used to use. It remains a real filter:
+     * {@code si -> is} and {@code ni -> in} were both on this list and both fail
+     * it, at margins of roughly 114 and 702.
+     */
+    static final int SHORT_PAIR_MARGIN = 1000;
+
     private static final String[][] SHORT_PAIRS = {
             {"ti", "to"},
             {"od", "of"},
@@ -87,9 +105,31 @@ final class EnglishCorrector {
     /**
      * How far the best candidate must beat the runner-up before we replace
      * without asking. Scores are natural-log-scaled by the dictionary's
-     * {@code logScale}, so 1000 means "about 2.7x more likely".
+     * {@code logScale}, so 3000 means "about 20x more likely".
+     *
+     * <p>Calibrated against real human typos rather than chosen — see
+     * {@link EnglishCorrectorRealCorpusTest}. Measured on 2,392 Wikipedia editor
+     * misspellings, silent-replacement precision against this value:
+     *
+     * <pre>
+     *   1000 -> 86.9%   (1,852 silent)
+     *   2000 -> 89.8%   (1,751)
+     *   3000 -> 91.4%   (1,668)
+     *   4000 -> 92.8%   (1,595)
+     *   6000 -> 94.1%   (1,486)
+     * </pre>
+     *
+     * <p>It started at 1000, picked off a generated corpus that flattered it
+     * badly — that corpus reported 99.3% precision where real typos gave 86.9%,
+     * because it only ever contained the errors we thought to simulate.
+     *
+     * <p>3000 rather than higher because of what the trade costs. Going from
+     * 1000 to 3000 gives up 85 correct silent fixes to prevent 99 wrong ones,
+     * which is worth it when a wrong one is the more damaging outcome. By 4000
+     * the exchange is roughly one-for-one, and past that it is losing more good
+     * corrections than it prevents bad ones.
      */
-    static final int SILENT_MARGIN = 1000;
+    static final int SILENT_MARGIN = 3000;
 
     /**
      * Added to a candidate that differs by exactly one substitution of a
@@ -366,7 +406,8 @@ final class EnglishCorrector {
                 // meaningfully compete with a one-edit fix.
                 break;
             }
-            if (best.score - other.score < SILENT_MARGIN) {
+            int margin = reviewedShortPair ? SHORT_PAIR_MARGIN : SILENT_MARGIN;
+            if (best.score - other.score < margin) {
                 return false;
             }
         }

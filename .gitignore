@@ -15,3 +15,7 @@ window.xml
 captures/
 .DS_Store
 Thumbs.db
+
+# Evaluation-only spelling corpora. Fetched by scripts/fetch-corpora.sh,
+# never committed: their licence terms are unstated upstream.
+.corpora/
