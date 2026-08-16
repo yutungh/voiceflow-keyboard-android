@@ -435,6 +435,87 @@ public class EnglishCorrectorTest {
                 corrector.suggest("ni", 3).autoAccept);
     }
 
+    // ------------------------------------------------ missing apostrophes
+
+    /**
+     * The apostrophe key lives on the symbols layer, so people skip it. Putting
+     * it back is derived from the lexicon rather than listed.
+     */
+    @Test
+    public void missingApostrophesAreRestored() {
+        String[][] cases = {
+                {"youre", "you're"}, {"wasnt", "wasn't"}, {"didnt", "didn't"},
+                {"doesnt", "doesn't"}, {"isnt", "isn't"}, {"thats", "that's"},
+                {"theres", "there's"}, {"couldnt", "couldn't"}, {"wouldnt", "wouldn't"},
+                {"havent", "haven't"}, {"arent", "aren't"}, {"theyre", "they're"},
+                {"youve", "you've"}, {"weve", "we've"},
+        };
+        for (String[] testCase : cases) {
+            EnglishCorrector.Result result = corrector.suggest(testCase[0], 3);
+            assertEquals(testCase[0], testCase[1], result.isEmpty() ? "" : result.words.get(0));
+            assertTrue(testCase[0] + " should apply without asking", result.autoAccept);
+        }
+    }
+
+    /**
+     * It must outrank ordinary ranking, not compete with it: "your" is far
+     * commoner than "you're", so as a candidate the restoration always loses.
+     */
+    @Test
+    public void restorationBeatsTheCommonerNeighbour() {
+        assertTrue(dictionary.logFrequency("your") > dictionary.logFrequency("you're"));
+        assertEquals("you're", best("youre"));
+    }
+
+    /**
+     * Words that merely look like contractions must be left alone. Each of these
+     * is a real word, so the restoration never runs.
+     */
+    @Test
+    public void realWordsThatResembleContractionsAreUntouched() {
+        for (String word : new String[]{"its", "lets", "whats", "id", "cant", "wont", "shed", "well"}) {
+            assertTrue(word + " should be a real word", dictionary.contains(word));
+            assertTrue(word + " must not be rewritten", corrector.suggest(word, 3).isEmpty());
+        }
+    }
+
+    // ------------------------------------------------------ glued word pairs
+
+    /** The reviewed glued forms the user asked about. */
+    @Test
+    public void reviewedGluedPairsAreSplit() {
+        String[][] cases = {
+                {"alot", "a lot"}, {"inthe", "in the"}, {"ofcourse", "of course"},
+                {"atleast", "at least"}, {"aswell", "as well"},
+                {"everytime", "every time"}, {"thankyou", "thank you"},
+        };
+        for (String[] testCase : cases) {
+            EnglishCorrector.Result result = corrector.suggest(testCase[0], 3);
+            assertEquals(testCase[0], testCase[1], result.isEmpty() ? "" : result.words.get(0));
+            assertTrue(testCase[0] + " should apply without asking", result.autoAccept);
+        }
+        // "iam" carries its own capital, because matchCase works off the whole
+        // typed token and would otherwise leave a bare lowercase "i".
+        assertEquals("I am", best("iam"));
+    }
+
+    /**
+     * Splitting is a named list, not a rule, and this is the guard on that.
+     * Generic splitting was measured against real typed errors and produced
+     * "adress -> a dress" and "wensday -> wens day": of the non-words that pass
+     * every lexical filter, only about one in sixty is the intended split.
+     */
+    @Test
+    public void unreviewedWordsAreNeverSplit() {
+        for (String word : new String[]{"adress", "belive", "wensday", "todo", "alright", "notebook"}) {
+            EnglishCorrector.Result result = corrector.suggest(word, 3);
+            for (String candidate : result.words) {
+                assertFalse(word + " must not be split: got " + candidate,
+                        candidate.contains(" "));
+            }
+        }
+    }
+
     // -------------------------------------------------- supplementary lexicon
 
     /**

@@ -91,6 +91,45 @@ final class EnglishCorrector {
      */
     static final int SHORT_PAIR_MARGIN = 1000;
 
+    /**
+     * Glued word pairs allowed to be split silently, as a reviewed list rather
+     * than a rule.
+     *
+     * <p>General splitting was designed, measured and rejected. Synthesising
+     * glued pairs made it look excellent — 3,581 of 3,581 recoverable — because
+     * that measurement has no negative class. Replayed against real typed
+     * errors it collapses: of the Wikipedia and Aspell non-words that pass every
+     * lexical filter (both halves real words, no bare single letters), 446 and
+     * 96 respectively would be split, and only 7 and 11 of those splits are the
+     * intended answer. It confidently produces {@code adress -> a dress},
+     * {@code belive -> be live} and {@code wensday -> wens day}.
+     *
+     * <p>No penalty constant rescues it either, because ranking sorts on edit
+     * distance before score: a split labelled one edit beats every two-edit
+     * correction however harshly it is penalised. Fixing that means a scorer
+     * that puts single words, splits and unknown words on one calibrated
+     * footing, which is a real piece of work and not this change.
+     *
+     * <p>So the frequent forms are named. {@code todo} is deliberately absent —
+     * TODO and Spanish "todo" are both ordinary — and {@code iam} carries its
+     * own capital, since {@code matchCase} works off the whole typed token and
+     * would leave a bare lowercase "i".
+     */
+    private static final String[][] SPLIT_PAIRS = {
+            {"alot", "a lot"},
+            {"inthe", "in the"},
+            {"ofcourse", "of course"},
+            {"atleast", "at least"},
+            {"aswell", "as well"},
+            {"everytime", "every time"},
+            {"thankyou", "thank you"},
+            {"iam", "I am"},
+            // Not here: "alright", which is a lexicon word in its own right and
+            // must never be rewritten to "all right"; and "dont", which is a
+            // missing apostrophe rather than a missing space and is handled by
+            // restoreApostrophe.
+    };
+
     private static final String[][] SHORT_PAIRS = {
             {"ti", "to"},
             {"od", "of"},
@@ -263,6 +302,23 @@ final class EnglishCorrector {
         }
         boolean realWord = dictionary.contains(word);
 
+        // Both of these are answers rather than candidates: they describe what
+        // the user did, not a guess about what they meant, so they short-circuit
+        // ranking entirely. Ranking would get them wrong -- "youre" scores best
+        // as "your" on raw frequency, since "you're" sits at the contraction
+        // floor -- and neither is really a typo. Skipping the apostrophe key is
+        // a shortcut, and a missing space is a different error channel.
+        if (!realWord) {
+            String restored = restoreApostrophe(word);
+            if (!restored.isEmpty()) {
+                return new Result(Collections.singletonList(restored), true);
+            }
+            String split = reviewedSplit(word);
+            if (!split.isEmpty()) {
+                return new Result(Collections.singletonList(split), true);
+            }
+        }
+
         char first = word.charAt(0);
         int start = dictionary.bucketStart(first);
         int end = dictionary.bucketEnd(first);
@@ -412,6 +468,53 @@ final class EnglishCorrector {
             }
         }
         return true;
+    }
+
+    /**
+     * The typed word with a missing apostrophe put back, or empty.
+     *
+     * <p>Derived rather than listed: try an apostrophe at each interior
+     * position and see whether the result is a lexicon word. That covers
+     * {@code youre}, {@code wasnt}, {@code didnt}, {@code thats}, {@code theyre}
+     * and the rest of the family from one rule, and it automatically declines
+     * where it should — {@code its}, {@code lets}, {@code whats} and {@code id}
+     * are real words, so they never reach here.
+     *
+     * <p>Requires exactly one position to work. More than one means genuine
+     * ambiguity and it falls through to ordinary ranking.
+     *
+     * <p>This has to outrank ranking rather than compete with it. On raw
+     * frequency {@code youre} scores best as {@code your} (-5,571) because
+     * {@code you're} sits at the contraction floor (-14,407), so as a candidate
+     * it would always lose. But skipping the apostrophe — which lives on the
+     * symbols layer — is a deliberate shortcut, not a slip, and that makes it
+     * far likelier than the extra letter {@code your} would require.
+     */
+    private String restoreApostrophe(String word) {
+        if (word.length() < 3 || word.indexOf('\'') >= 0) {
+            return "";
+        }
+        String found = "";
+        for (int i = 1; i < word.length(); i++) {
+            String candidate = word.substring(0, i) + "'" + word.substring(i);
+            if (dictionary.contains(candidate)) {
+                if (!found.isEmpty()) {
+                    return "";
+                }
+                found = candidate;
+            }
+        }
+        return restoreContractionCase(found);
+    }
+
+    /** The reviewed two-word expansion of a glued form, or empty. */
+    private static String reviewedSplit(String word) {
+        for (String[] pair : SPLIT_PAIRS) {
+            if (pair[0].equals(word)) {
+                return pair[1];
+            }
+        }
+        return "";
     }
 
     /** Whether {@code typed -> correction} is one of the named short exceptions. */
