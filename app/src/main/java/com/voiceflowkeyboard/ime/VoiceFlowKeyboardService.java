@@ -3160,7 +3160,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             boolean landscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE;
             boolean split = KeyboardGeometry.shouldSplit(configuration.smallestScreenWidthDp);
             return new KeyboardMetrics(
-                    KeyboardGeometry.keyHeightDp(landscape),
+                    KeyboardGeometry.keyHeightDp(landscape, split),
                     split,
                     split ? KeyboardGeometry.gutterDp(configuration.screenWidthDp) : 0
             );

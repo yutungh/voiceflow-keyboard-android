@@ -20,6 +20,8 @@ public class KeyboardGeometryTest {
     private static final int FOLD_COVER_SW_DP = 360;
     private static final int PHONE_SW_DP = 384;
     private static final int PHONE_LANDSCAPE_WIDTH_DP = 832;
+    private static final int FOLD_UNFOLDED_HEIGHT_DP = 835;
+    private static final int PHONE_HEIGHT_DP = 832;
 
     @Test
     public void unfoldedFoldSplits() {
@@ -49,25 +51,97 @@ public class KeyboardGeometryTest {
 
     @Test
     public void landscapeShortensKeys() {
-        assertEquals(KeyboardGeometry.KEY_HEIGHT_DP, KeyboardGeometry.keyHeightDp(false));
-        assertEquals(KeyboardGeometry.KEY_HEIGHT_LANDSCAPE_DP, KeyboardGeometry.keyHeightDp(true));
-        assertTrue(KeyboardGeometry.keyHeightDp(true) < KeyboardGeometry.keyHeightDp(false));
+        assertTrue(KeyboardGeometry.keyHeightDp(true, false)
+                < KeyboardGeometry.keyHeightDp(false, false));
+        assertTrue(KeyboardGeometry.keyHeightDp(true, true)
+                < KeyboardGeometry.keyHeightDp(false, true));
     }
 
+    /**
+     * A phone must be left exactly as it was. The owner types on one daily and
+     * this change is for the Fold.
+     */
+    @Test
+    public void ordinaryPhoneKeepsItsKeyHeight() {
+        assertFalse(KeyboardGeometry.shouldSplit(PHONE_SW_DP));
+        assertEquals(48, KeyboardGeometry.keyHeightDp(false, false));
+        assertEquals(42, KeyboardGeometry.keyHeightDp(true, false));
+    }
+
+    /**
+     * The defect this change exists to fix: an unfolded Fold was getting a
+     * phone's keyboard, 48dp keys on a screen 835dp tall.
+     */
+    @Test
+    public void aSplitKeyboardGetsTallerKeys() {
+        assertTrue(KeyboardGeometry.shouldSplit(FOLD_UNFOLDED_SW_DP));
+        assertEquals(56, KeyboardGeometry.keyHeightDp(false, true));
+        assertEquals(50, KeyboardGeometry.keyHeightDp(true, true));
+        assertTrue(KeyboardGeometry.keyHeightDp(false, true)
+                > KeyboardGeometry.keyHeightDp(false, false));
+    }
+
+    /**
+     * Height keys off the split decision, not the screen height, because the
+     * Fold is 835dp tall and the phone 832dp — height cannot tell them apart.
+     */
+    @Test
+    public void heightIsNotAUsableSignalForDeviceSize() {
+        assertTrue("the premise: the two devices are the same height",
+                Math.abs(FOLD_UNFOLDED_HEIGHT_DP - PHONE_HEIGHT_DP) < 10);
+        assertTrue("width is what separates them",
+                FOLD_UNFOLDED_SW_DP > PHONE_SW_DP * 1.9);
+    }
+
+    /**
+     * The old 540dp span left a 752dp Fold with a 212dp gutter -- 28% of the
+     * screen spent on empty space -- and 54dp keys.
+     */
     @Test
     public void gutterLeavesUsableHalvesOnTheFold() {
         int gutter = KeyboardGeometry.gutterDp(FOLD_UNFOLDED_SW_DP);
-        assertEquals(752 - 540, gutter);
+        assertEquals(752 - 640, gutter);
+        assertTrue("gutter should have shrunk from the old 212dp", gutter < 212);
         int perHalf = (FOLD_UNFOLDED_SW_DP - gutter) / 2;
         assertTrue("each half should stay thumb-sized, was " + perHalf + "dp",
-                perHalf >= 240 && perHalf <= 320);
+                perHalf >= 280 && perHalf <= 320);
+        int keyWidth = perHalf / 5;
+        assertEquals("top-row key width", 64, keyWidth);
+        assertTrue("should beat the old 54dp", keyWidth > 54);
     }
 
+    /** Rotating the Fold keeps the key size and widens the gap, by design. */
     @Test
-    public void gutterIsClampedAtBothEnds() {
+    public void rotatingTheFoldKeepsKeyWidthAndGrowsTheGap() {
+        int portrait = KeyboardGeometry.gutterDp(FOLD_UNFOLDED_SW_DP);
+        int landscape = KeyboardGeometry.gutterDp(FOLD_UNFOLDED_HEIGHT_DP);
+        assertTrue("the gap absorbs the extra width", landscape > portrait);
+        int portraitKey = (FOLD_UNFOLDED_SW_DP - portrait) / 10;
+        int landscapeKey = (FOLD_UNFOLDED_HEIGHT_DP - landscape) / 10;
+        assertEquals("key width should not change with rotation", portraitKey, landscapeKey);
+    }
+
+    /**
+     * Floored so the halves never touch, and deliberately not capped: the gap
+     * has to keep absorbing slack or the keys start growing instead.
+     */
+    @Test
+    public void gutterIsFlooredButNotCapped() {
         assertEquals(KeyboardGeometry.SPLIT_MIN_GUTTER_DP, KeyboardGeometry.gutterDp(400));
-        assertEquals(KeyboardGeometry.SPLIT_MAX_GUTTER_DP, KeyboardGeometry.gutterDp(4000));
-        assertTrue(KeyboardGeometry.gutterDp(700) > KeyboardGeometry.SPLIT_MIN_GUTTER_DP);
+        assertTrue(KeyboardGeometry.gutterDp(800) > KeyboardGeometry.SPLIT_MIN_GUTTER_DP);
+        assertEquals(4000 - 640, KeyboardGeometry.gutterDp(4000));
+    }
+
+    /**
+     * However wide the screen, a key stays a key. The halves hold their size
+     * and the gap takes everything else.
+     */
+    @Test
+    public void keyWidthIsStableAcrossEveryScreenWidth() {
+        for (int width = 700; width <= 4000; width += 10) {
+            int keyWidth = (width - KeyboardGeometry.gutterDp(width)) / 10;
+            assertEquals("key width drifted at " + width + "dp", 64, keyWidth);
+        }
     }
 
     /** qwert|yuiop, asdfg|hjkl, zxcv|bnm — the seam, not the arithmetic middle. */
