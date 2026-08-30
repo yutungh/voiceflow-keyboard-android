@@ -168,8 +168,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     private final Set<String> historyOriginalPreviewIds = new HashSet<>();
     private String lastAutoCorrectOriginal = "";
     private String lastAutoCorrectReplacement = "";
-    private String lastAutoCorrectSeparator = "";
-    private boolean pendingAutoCorrectAccept;
+    private boolean pinyinCandidateStripExpanded;
     private int correctionGeneration;
     private int statusSpinnerStep;
 
@@ -242,10 +241,11 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     @Override
     public void onStartInputView(EditorInfo info, boolean restarting) {
         super.onStartInputView(info, restarting);
-        // Now that the field is known, start the 1.3 MB lexicon parse if this
-        // one can use it. Waiting for the first keystroke would put the parse
-        // in the worst possible place; onCreate is too early, because there is
-        // no field yet and a password box never needs it at all.
+        // Now that the field is known, start the 1.3 MB spelling lexicon parse
+        // if this one can use suggestions. Waiting for the first keystroke
+        // would put the parse in the worst possible place; onCreate is too
+        // early, because there is no field yet and a password box never needs
+        // it at all.
         if (shouldTypingAssistance()) {
             englishEngine().prepare();
         }
@@ -494,6 +494,10 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     }
 
     private LinearLayout buildStrip() {
+        // The input view can be rebuilt while the service and pinyin session
+        // survive a configuration change. The new toolbar starts uncollapsed;
+        // showPinyinCandidates() will expand it again when needed.
+        pinyinCandidateStripExpanded = false;
         LinearLayout outer = new LinearLayout(this);
         outer.setOrientation(LinearLayout.VERTICAL);
         outer.setPadding(0, 0, 0, dp(4));
@@ -1178,7 +1182,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         if (showRetoneChip()) {
             return;
         }
-        if (showAutoCorrectionChip()) {
+        if (showSpellingSuggestionChip()) {
             return;
         }
         if (showAutoCompleteChips()) {
@@ -1208,7 +1212,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         return true;
     }
 
-    private boolean showAutoCorrectionChip() {
+    private boolean showSpellingSuggestionChip() {
         if (chipStrip == null || recording || processing || pendingAutoCorrectReplacement.isEmpty()) {
             return false;
         }
@@ -1218,14 +1222,14 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         original.setBackground(keyBackground(colors.keyAlt, false));
         chipStrip.addView(original);
 
-        TextView best = chip(pendingAutoCorrectReplacement, v -> applyPendingAutoCorrection(false));
+        TextView best = chip(pendingAutoCorrectReplacement, v -> applySpellingSuggestion());
         best.setTextColor(colors.onAccent);
         best.setBackground(keyBackground(colors.accent, true));
         chipStrip.addView(best);
 
         String alternate = alternateAutoCorrection();
         if (!alternate.isEmpty()) {
-            TextView alt = chip(alternate, v -> applyPendingAutoCorrection(false, alternate));
+            TextView alt = chip(alternate, v -> applySpellingSuggestion(alternate));
             chipStrip.addView(alt);
         }
         return true;
@@ -1572,6 +1576,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     }
 
     private void hideChipStrip() {
+        setPinyinCandidateStripExpanded(false);
         if (chipStrip != null) {
             chipStrip.removeAllViews();
             chipStrip.setVisibility(View.GONE);
@@ -2026,12 +2031,10 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             updateAutoCapitalization();
             return;
         }
-        boolean corrected = applyPendingAutoCorrection(true);
+        // Spelling help is deliberately suggest-only. A separator commits
+        // exactly what the user typed; only tapping a chip replaces a word.
         applyRecentPhraseReplacement();
         commitText(separator);
-        if (corrected) {
-            lastAutoCorrectSeparator = separator;
-        }
         clearAutoCorrection();
         updateAutoCapitalization();
     }
@@ -2040,16 +2043,9 @@ public class VoiceFlowKeyboardService extends InputMethodService {
      * Applies double-space-to-full-stop, or drops a space before closing
      * punctuation. Returns true when it handled the key.
      *
-     * <p>Neither rule can collide with an autocorrection being applied on the
-     * same keystroke: both require a trailing space, and a trailing space means
-     * there is no word in front of the cursor to have corrected. A correction
-     * from an <em>earlier</em> keystroke is a different matter — its undo record
-     * describes a tail like {@code "the "} that this rewrite is about to turn
-     * into {@code "the. "}. Left alone, {@link #undoLastAutoCorrectionIfPossible}
-     * would keep hunting for the old tail and backspace-revert would quietly
-     * stop working. Clear it rather than rewrite it: by now the correction is
-     * two keystrokes back, and reverting it instead of the punctuation the user
-     * just typed would be the more surprising outcome.
+     * <p>Spelling suggestions are never applied from this path. A manually
+     * chosen suggestion can only be reverted while it is still immediately in
+     * front of the cursor; inserting punctuation naturally ends that window.
      */
     private boolean applyTypingRule(String separator) {
         if (!shouldTypingAssistance()) {
@@ -2640,7 +2636,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         if (!fallback.isEmpty()) {
             List<String> suggestions = new ArrayList<>();
             suggestions.add(fallback);
-            setPendingAutoCorrection(word, suggestions, true);
+            setPendingAutoCorrection(word, suggestions);
             return;
         }
 
@@ -2697,15 +2693,15 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             setPendingAutoComplete(word, suggestions.completions);
             return;
         }
-        setPendingAutoCorrection(word, cased, suggestions.correction.autoAccept);
+        setPendingAutoCorrection(word, cased);
     }
 
-    private boolean applyPendingAutoCorrection(boolean autoOnly) {
-        return applyPendingAutoCorrection(autoOnly, pendingAutoCorrectReplacement);
+    private boolean applySpellingSuggestion() {
+        return applySpellingSuggestion(pendingAutoCorrectReplacement);
     }
 
-    private boolean applyPendingAutoCorrection(boolean autoOnly, String replacement) {
-        if (replacement == null || replacement.trim().isEmpty() || (autoOnly && !pendingAutoCorrectAccept)) {
+    private boolean applySpellingSuggestion(String replacement) {
+        if (replacement == null || replacement.trim().isEmpty()) {
             return false;
         }
         InputConnection connection = getCurrentInputConnection();
@@ -2719,7 +2715,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         }
         connection.deleteSurroundingText(word.length(), 0);
         connection.commitText(replacement, 1);
-        rememberLastAutoCorrection(word, replacement, "");
+        rememberLastAutoCorrection(word, replacement);
         clearAutoCorrection();
         return true;
     }
@@ -2742,7 +2738,7 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         return "";
     }
 
-    private void setPendingAutoCorrection(String word, List<String> suggestions, boolean autoAccept) {
+    private void setPendingAutoCorrection(String word, List<String> suggestions) {
         if (suggestions == null || suggestions.isEmpty()) {
             clearAutoCorrection();
             return;
@@ -2759,7 +2755,8 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             return;
         }
         pendingAutoCorrectReplacement = pendingAutoCorrectSuggestions.get(0);
-        pendingAutoCorrectAccept = autoAccept;
+        // There is intentionally no auto-accept flag. The scorer may rank a
+        // candidate, but replacing typed text always requires a chip tap.
         showIdleChips();
     }
 
@@ -2767,7 +2764,6 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         pendingAutoCorrectWord = "";
         pendingAutoCorrectReplacement = "";
         pendingAutoCorrectSuggestions.clear();
-        pendingAutoCorrectAccept = false;
         pendingAutoCompletePrefix = prefix == null ? "" : prefix;
         pendingAutoCompleteSuggestions.clear();
         if (pendingAutoCompletePrefix.length() < 2 || containsDigit(pendingAutoCompletePrefix)) {
@@ -2813,7 +2809,6 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         pendingAutoCorrectSuggestions.clear();
         pendingAutoCompletePrefix = "";
         pendingAutoCompleteSuggestions.clear();
-        pendingAutoCorrectAccept = false;
         // Invalidate anything already running on the typing executor. Removing
         // the debounce callback only stops work that has not started; a pass
         // already in flight would otherwise come back and repopulate the chips
@@ -2861,23 +2856,21 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         suggestions.add(trimmed);
     }
 
-    private void rememberLastAutoCorrection(String original, String replacement, String separator) {
+    private void rememberLastAutoCorrection(String original, String replacement) {
         lastAutoCorrectOriginal = original == null ? "" : original;
         lastAutoCorrectReplacement = replacement == null ? "" : replacement;
-        lastAutoCorrectSeparator = separator == null ? "" : separator;
     }
 
     private void clearLastAutoCorrection() {
         lastAutoCorrectOriginal = "";
         lastAutoCorrectReplacement = "";
-        lastAutoCorrectSeparator = "";
     }
 
     private boolean undoLastAutoCorrectionIfPossible(InputConnection connection) {
         if (lastAutoCorrectOriginal.isEmpty() || lastAutoCorrectReplacement.isEmpty()) {
             return false;
         }
-        String tail = lastAutoCorrectReplacement + lastAutoCorrectSeparator;
+        String tail = lastAutoCorrectReplacement;
         if (tail.isEmpty()) {
             return false;
         }
@@ -3107,7 +3100,6 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             return;
         }
         clearLastVoiceInsertion();
-        boolean corrected = applyPendingAutoCorrection(true);
         applyRecentPhraseReplacement();
         EditorInfo info = getCurrentInputEditorInfo();
         int action = info == null ? EditorInfo.IME_ACTION_NONE : info.imeOptions & EditorInfo.IME_MASK_ACTION;
@@ -3120,9 +3112,6 @@ public class VoiceFlowKeyboardService extends InputMethodService {
         boolean multiline = info != null && (info.inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
         if (multiline) {
             connection.commitText("\n", 1);
-            if (corrected) {
-                lastAutoCorrectSeparator = "\n";
-            }
             clearAutoCorrection();
             updateAutoCapitalization();
             return;
@@ -3356,20 +3345,25 @@ public class VoiceFlowKeyboardService extends InputMethodService {
     /** Candidate strip. Highest priority: it owns the strip while composing. */
     private boolean showPinyinCandidates() {
         if (chipStrip == null || !composingPinyin() || recording || processing || historyMode) {
+            setPinyinCandidateStripExpanded(false);
             return false;
         }
         List<PinyinCandidate> candidates = pinyinSession.candidates();
+        setPinyinCandidateStripExpanded(true);
         chipStrip.removeAllViews();
+        chipScroller.scrollTo(0, 0);
         showChipStrip();
         if (candidates.isEmpty()) {
-            TextView raw = chip(pinyinSession.rawText(), v -> { });
+            TextView raw = pinyinCandidateChip(pinyinSession.rawText(), v -> { });
             raw.setTextColor(colors.status);
             chipStrip.addView(raw);
             return true;
         }
         for (int i = 0; i < candidates.size(); i++) {
             final int index = i;
-            TextView candidate = chip(candidates.get(i).text, v -> selectPinyinCandidate(index));
+            TextView candidate = pinyinCandidateChip(
+                    candidates.get(i).text,
+                    v -> selectPinyinCandidate(index));
             if (i == 0) {
                 candidate.setTextColor(colors.onAccent);
                 candidate.setBackground(keyBackground(colors.accent, true));
@@ -3377,6 +3371,53 @@ public class VoiceFlowKeyboardService extends InputMethodService {
             chipStrip.addView(candidate);
         }
         return true;
+    }
+
+    /**
+     * Gives pinyin candidates the complete toolbar width while composing. The
+     * action buttons return as soon as the composition is committed or cleared.
+     */
+    private void setPinyinCandidateStripExpanded(boolean expanded) {
+        if (pinyinCandidateStripExpanded == expanded) {
+            return;
+        }
+        pinyinCandidateStripExpanded = expanded;
+        if (expanded) {
+            if (cancelRecordingButton != null) {
+                cancelRecordingButton.setVisibility(View.GONE);
+            }
+            if (translationButton != null) {
+                translationButton.setVisibility(View.GONE);
+            }
+            if (createButton != null) {
+                createButton.setVisibility(View.GONE);
+            }
+            if (instructionButton != null) {
+                instructionButton.setVisibility(View.GONE);
+            }
+            if (micButton != null) {
+                micButton.setVisibility(View.GONE);
+            }
+            if (topHistoryButton != null) {
+                topHistoryButton.setVisibility(View.GONE);
+            }
+            return;
+        }
+        setHistoryControlsActive(historyMode);
+    }
+
+    /** Larger, easier-to-hit text than the compact English/status chips. */
+    private TextView pinyinCandidateChip(String text, View.OnClickListener listener) {
+        TextView candidate = chip(text, listener);
+        candidate.setTextSize(18);
+        candidate.setMinWidth(dp(48));
+        candidate.setPadding(dp(16), 0, dp(16), 0);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dp(36));
+        params.setMargins(dp(2), 0, dp(2), 0);
+        candidate.setLayoutParams(params);
+        return candidate;
     }
 
     private void setInputMode(InputMode next) {

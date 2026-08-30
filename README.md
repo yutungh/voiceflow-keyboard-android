@@ -62,7 +62,7 @@ Good search terms for this project: Android voice keyboard, VoiceFlow Keyboard, 
 - Translation history remembers the target language and generated style variants for comparison or reuse.
 - Retone can regenerate the last inserted dictation or translation from its original transcript, safely replace it when the field is unchanged, and keep alternate style/expression versions together in history.
 - Low-latency GPT-5 transform settings with safe fallback retry.
-- Minimal autocorrect layer using Android spell checker suggestions when available.
+- Non-destructive English spelling and completion suggestions; spelling candidates are never applied unless the user taps one.
 - Personal vocabulary supports multiple likely mishearings, an exact output, and optional context for names, nicknames, jargon, and commands.
 - GPT Transcribe receives personal exact spellings as keyword hints, while a provider-independent local correction guarantees configured output such as `N P M run sign off` -> `npm run signoff`.
 - Built-in phrase replacement example: `Cloud Code` -> `Claude Code`.
@@ -86,7 +86,7 @@ Known tradeoffs:
 - Offline Vosk transcription downloads a compact local model on first use and runs the transcription on-device after recording stops.
 - Offline Parakeet downloads a much larger local model, about 600 MB, on first use. It is intended as the higher-accuracy offline English option.
 - Offline fallback uses an installed Parakeet model first, then an installed Vosk model. Use Settings > Voice input > Offline fallback to prepare the compact Vosk fallback before you need it.
-- Autocorrect is intentionally conservative and much simpler than Gboard or Apple Keyboard.
+- English spelling suggestions are context-free and much simpler than Gboard or Apple Keyboard, so they are never applied automatically.
 - The UI is tuned for a modern Samsung/Android phone but is not exhaustively tested across devices.
 
 ## Build
